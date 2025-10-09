@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -11,6 +12,8 @@ var mode = os.Getenv("MODE")
 func main() {
 	var wg sync.WaitGroup
 	conns := map[string]*vkConn{}
+
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	if mode == "client" {
 		wg.Add(1)
