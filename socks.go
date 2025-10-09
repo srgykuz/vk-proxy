@@ -2,116 +2,211 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net"
-	"sync"
+	"slices"
+	"time"
 )
 
-func listenSocks(conns map[string]*vkConn) {
-	ln, err := net.Listen("tcp", "127.0.0.1:1080")
+var socksHost = "127.0.0.1"
+var socksPort = 1080
+var socksDeadline = time.Second * 30
+var socksBufSize = 2048
+var socksLogData = false
+
+type address struct {
+	host string
+	port int
+}
+
+func (a address) String() string {
+	return fmt.Sprintf("%v:%v", a.host, a.port)
+}
+
+func bytesToHex(b []byte) string {
+	return fmt.Sprintf("% x", b)
+}
+
+func listenSocks() error {
+	addr := address{host: socksHost, port: socksPort}.String()
+	ln, err := net.Listen("tcp", addr)
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	fmt.Println("Listening at 127.0.0.1:1080")
+	slog.Info("socks5 server listening", "addr", addr)
 
 	for {
 		conn, err := ln.Accept()
 
 		if err != nil {
-			panic(err)
+			slog.Error("socks5 server", "err", err.Error())
+			continue
 		}
 
-		vk, err := openVkConn("")
+		remote := conn.RemoteAddr().String()
+		slog.Debug("socks5 conn accepted", "remote", remote)
 
-		if err != nil {
-			panic(err)
-		}
+		go func() {
+			defer slog.Debug("socks5 conn closed", "remote", remote)
+			defer conn.Close()
 
-		conns[vk.id] = vk
-		vk.fwdConn = conn
-
-		go handleSocks(conn, vk, true)
+			if err := handleSocks(conn); err != nil {
+				slog.Error("socks5 conn", "remote", remote, "err", err.Error())
+			}
+		}()
 	}
 }
 
-func handleSocks(conn net.Conn, vk *vkConn, socks bool) {
-	var wg sync.WaitGroup
+const (
+	socksStageHandshake = iota
+	socksStageConnect
+	socksStageForward
+)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer conn.Close()
-		defer vk.close()
+var (
+	errSocksUnacceptable = errors.New("data is malformed")
+	errSocksUnsupported  = errors.New("logic is not supported")
+	errSocksPartialRead  = errors.New("partial read is not supported")
+)
 
-		buf := make([]byte, 2048)
-		step := 1
+func handleSocks(conn net.Conn) error {
+	remote := conn.RemoteAddr().String()
+	buf := make([]byte, socksBufSize)
+	stage := socksStageHandshake
+	fwdTo := address{}
 
-		if !socks {
-			step = 3
-		}
+	for {
+		conn.SetDeadline(time.Now().Add(socksDeadline))
 
-		for {
-			n, err := conn.Read(buf)
+		n, err := conn.Read(buf)
 
-			if n > 0 {
-				data := buf[:n]
+		if n > 0 {
+			in := buf[:n]
 
-				// fmt.Println(data)
+			if socksLogData {
+				slog.Debug("socks5 conn", "remote", remote, "in", bytesToHex(in))
+			}
 
-				switch step {
-				case 1:
-					conn.Write([]byte{0x05, 0x00})
-				case 2:
-					cmd := data[1]
+			var out []byte
+			var err error
 
-					if cmd != 0x01 {
-						fmt.Println("Not a CONNECT command")
-						return
-					}
+			switch stage {
+			case socksStageHandshake:
+				out, err = handleSocksStageHandshake(in)
+				stage = socksStageConnect
+			case socksStageConnect:
+				fwdTo, out, err = handleSocksStageConnect(in)
+				stage = socksStageForward
+			default:
+				slog.Info("socks5 conn", "remote", remote, "to", fwdTo.String(), "bytes", len(in))
+				return nil
+			}
 
-					atyp := data[3]
+			if len(out) > 0 {
+				conn.Write(out)
 
-					if atyp != 0x01 {
-						fmt.Println("Not an IPv4 address")
-						return
-					}
-
-					host := net.IPv4(data[4], data[5], data[6], data[7]).String()
-					port := int(binary.BigEndian.Uint16(data[8:10]))
-
-					vk.connect(host, port)
-					<-vk.established
-
-					conn.Write([]byte{0x05, 0x00, 0x00, 0x01, data[4], data[5], data[6], data[7], data[8], data[9]})
-				default:
-					vk.forward(data)
+				if socksLogData {
+					slog.Debug("socks5 conn", "remote", remote, "out", bytesToHex(out))
 				}
-
-				step++
 			}
 
 			if err != nil {
-				if err.Error() != "EOF" {
-					fmt.Println("Read error: ", err)
-				} else {
-					fmt.Println("Connection closed by peer")
-				}
-
-				return
+				return err
 			}
 		}
-	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer conn.Close()
-		defer vk.close()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
 
-		<-vk.terminated
-	}()
+		if err != nil {
+			return err
+		}
+	}
+}
 
-	wg.Wait()
+func handleSocksStageHandshake(in []byte) ([]byte, error) {
+	if in[0] != 0x05 {
+		return nil, errSocksUnacceptable
+	}
+
+	if len(in) < 2 {
+		return nil, errSocksPartialRead
+	}
+
+	nmethods := int(in[1])
+
+	if len(in) < 2+nmethods {
+		return nil, errSocksPartialRead
+	}
+
+	methods := in[2 : 2+nmethods]
+
+	if slices.Contains(methods, 0x00) {
+		return []byte{0x05, 0x00}, nil
+	}
+
+	return []byte{0x05, 0xff}, errSocksUnsupported
+}
+
+func handleSocksStageConnect(in []byte) (address, []byte, error) {
+	if in[0] != 0x05 {
+		return address{}, nil, errSocksUnacceptable
+	}
+
+	if len(in) < 5 {
+		return address{}, nil, errSocksPartialRead
+	}
+
+	cmd := in[1]
+
+	if cmd != 0x01 {
+		return address{}, nil, errSocksUnsupported
+	}
+
+	atyp := in[3]
+	naddr := 0
+	offset := 4
+
+	switch atyp {
+	case 0x01:
+		naddr = 4
+	case 0x03:
+		naddr = int(in[4])
+		offset = 5
+	case 0x04:
+		naddr = 16
+	default:
+		return address{}, nil, errSocksUnsupported
+	}
+
+	if len(in) < offset+naddr+2 {
+		return address{}, nil, errSocksPartialRead
+	}
+
+	baddr := in[offset : offset+naddr]
+	addr := ""
+
+	if atyp == 0x03 {
+		addr = string(baddr)
+	} else {
+		addr = net.IP(baddr).String()
+	}
+
+	port := int(binary.BigEndian.Uint16((in[offset+naddr : offset+naddr+2])))
+	dst := address{
+		host: addr,
+		port: port,
+	}
+
+	out := make([]byte, len(in))
+	copy(out, in)
+	out[1] = 0x00
+
+	return dst, out, nil
 }

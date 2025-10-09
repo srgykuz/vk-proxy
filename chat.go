@@ -85,7 +85,7 @@ func handleMessage(msg string, vk *vkConn) {
 		}
 
 		vk.fwdConn = c
-		go handleSocks(c, vk, false)
+		// go handleSocks(c, vk, false)
 
 		vk.connected()
 	case "ERROR":
