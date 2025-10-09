@@ -39,7 +39,7 @@ func createURL(path string, values url.Values) string {
 
 func do(req *http.Request) (*http.Response, error) {
 	client := &http.Client{
-		Timeout: time.Second * 30,
+		Timeout: time.Second * 10,
 	}
 
 	return client.Do(req)
