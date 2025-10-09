@@ -7,168 +7,190 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
+	"time"
 )
 
-var ACCESS_TOKEN = os.Getenv("ACCESS_TOKEN")
-var USER_ID = os.Getenv("USER_ID")
-var API_VERSION = "5.199"
+var clubAccessToken = os.Getenv("CLUB_ACCESS_TOKEN")
+var userID = os.Getenv("USER_ID")
+var version = "5.199"
+var origin = "https://api.vk.ru/method"
 
-type VKError struct {
+type errorResult struct {
 	ErrorCode int    `json:"error_code"`
 	ErrorMsg  string `json:"error_msg"`
 }
 
-type SendMessageResp struct {
-	Error    VKError `json:"error"`
-	Response int     `json:"response"`
-}
-
-func sendMessage(msg string) error {
-	u, err := url.Parse("https://api.vk.ru/method/messages.send")
-
-	if err != nil {
-		return err
-	}
-
-	q := url.Values{
-		"user_id":      []string{USER_ID},
-		"access_token": []string{ACCESS_TOKEN},
-		"v":            []string{API_VERSION},
-		"random_id":    []string{"0"},
-		"message":      []string{msg},
-	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequest("POST", u.String(), nil)
-
-	if err != nil {
-		return err
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return err
-	}
-
-	body := SendMessageResp{}
-
-	if err := json.Unmarshal(data, &body); err != nil {
-		return fmt.Errorf("failed to unmarshal response json: %w; body: %s", err, string(data))
-	}
-
-	if body.Error.ErrorCode != 0 {
-		return fmt.Errorf("VK API error %d: %s", body.Error.ErrorCode, body.Error.ErrorMsg)
+func (r errorResult) check() error {
+	if r.ErrorCode != 0 {
+		return fmt.Errorf("code %d: %s", r.ErrorCode, r.ErrorMsg)
 	}
 
 	return nil
 }
 
-type GetMessagesResp struct {
-	Error    VKError             `json:"error"`
-	Response GetMessagesResponse `json:"response"`
-}
-
-type GetMessagesResponse struct {
-	Count int       `json:"count"`
-	Items []Message `json:"items"`
-}
-
-type Message struct {
-	ID   int    `json:"id"`
-	Text string `json:"text"`
-}
-
-type GetMessagesParams struct {
-	Offset int
-	Count  int
-	Rev    int
-}
-
-func getMessages(params GetMessagesParams) ([]Message, error) {
-	u, err := url.Parse("https://api.vk.ru/method/messages.getHistory")
-
-	if err != nil {
-		return nil, err
+func createURL(path string, values url.Values) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
 	}
 
-	q := url.Values{
-		"user_id":      []string{USER_ID},
-		"access_token": []string{ACCESS_TOKEN},
-		"v":            []string{API_VERSION},
-		"offset":       []string{fmt.Sprintf("%d", params.Offset)},
-		"count":        []string{fmt.Sprintf("%d", params.Count)},
-		"rev":          []string{fmt.Sprintf("%d", params.Rev)},
+	return fmt.Sprintf("%v%v?%s", origin, path, values.Encode())
+}
+
+func do(req *http.Request) (*http.Response, error) {
+	client := &http.Client{
+		Timeout: time.Second * 30,
 	}
 
-	u.RawQuery = q.Encode()
+	return client.Do(req)
+}
 
-	req, err := http.NewRequest("POST", u.String(), nil)
-
-	if err != nil {
-		return nil, err
+func check(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %v", resp.StatusCode)
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	return nil
+}
+
+type messagesSendParams struct {
+	message string
+}
+
+type messagesSendResult struct {
+	Error    errorResult `json:"error"`
+	Response int         `json:"response"`
+}
+
+func messagesSend(params messagesSendParams) (int, error) {
+	values := url.Values{}
+	values.Set("access_token", clubAccessToken)
+	values.Set("v", version)
+	values.Set("user_id", userID)
+	values.Set("random_id", "0")
+	values.Set("message", params.message)
+
+	uri := createURL("messages.send", values)
+	req, err := http.NewRequest("POST", uri, nil)
 
 	if err != nil {
-		return nil, err
+		return 0, err
+	}
+
+	resp, err := do(req)
+
+	if err != nil {
+		return 0, err
 	}
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status: %s", resp.Status)
+	if err := check(resp); err != nil {
+		return 0, err
 	}
 
 	data, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	body := GetMessagesResp{}
+	result := messagesSendResult{}
 
-	if err := json.Unmarshal(data, &body); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response json: %w; body: %s", err, string(data))
+	if err := json.Unmarshal(data, &result); err != nil {
+		return 0, err
 	}
 
-	if body.Error.ErrorCode != 0 {
-		return nil, fmt.Errorf("VK API error %d: %s", body.Error.ErrorCode, body.Error.ErrorMsg)
+	if err := result.Error.check(); err != nil {
+		return 0, err
 	}
 
-	return body.Response.Items, nil
+	return result.Response, nil
 }
 
-func getLastMessage() (Message, error) {
-	params := GetMessagesParams{
-		Offset: 0,
-		Count:  1,
-		Rev:    0,
-	}
-	messages, err := getMessages(params)
+type messagesGetHistoryParams struct {
+	offset int
+	count  int
+	rev    int
+}
+
+type messagesGetHistoryResult struct {
+	Error    errorResult                `json:"error"`
+	Response messagesGetHistoryResponse `json:"response"`
+}
+
+type messagesGetHistoryResponse struct {
+	Count int       `json:"count"`
+	Items []message `json:"items"`
+}
+
+type message struct {
+	ID   int    `json:"id"`
+	Text string `json:"text"`
+}
+
+func messagesGetHistory(params messagesGetHistoryParams) (messagesGetHistoryResponse, error) {
+	values := url.Values{}
+	values.Set("access_token", clubAccessToken)
+	values.Set("v", version)
+	values.Set("user_id", userID)
+	values.Set("offset", fmt.Sprint(params.offset))
+	values.Set("count", fmt.Sprint(params.count))
+	values.Set("rev", fmt.Sprint(params.rev))
+
+	uri := createURL("messages.getHistory", values)
+	req, err := http.NewRequest("POST", uri, nil)
 
 	if err != nil {
-		return Message{}, err
+		return messagesGetHistoryResponse{}, err
 	}
 
-	if len(messages) == 0 {
-		return Message{}, fmt.Errorf("no messages found")
+	resp, err := do(req)
+
+	if err != nil {
+		return messagesGetHistoryResponse{}, err
 	}
 
-	return messages[0], nil
+	defer resp.Body.Close()
+
+	if err := check(resp); err != nil {
+		return messagesGetHistoryResponse{}, err
+	}
+
+	data, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return messagesGetHistoryResponse{}, err
+	}
+
+	result := messagesGetHistoryResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return messagesGetHistoryResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return messagesGetHistoryResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
+func messagesGetLatest() (message, error) {
+	p := messagesGetHistoryParams{
+		offset: 0,
+		count:  1,
+		rev:    0,
+	}
+	resp, err := messagesGetHistory(p)
+
+	if err != nil {
+		return message{}, err
+	}
+
+	if len(resp.Items) == 0 {
+		return message{}, fmt.Errorf("no messages found")
+	}
+
+	return resp.Items[0], nil
 }

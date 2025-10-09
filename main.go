@@ -55,7 +55,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		lastMsg, err := getLastMessage()
+		lastMsg, err := messagesGetLatest()
 
 		if err != nil {
 			panic(err)
@@ -64,22 +64,22 @@ func main() {
 		for {
 			time.Sleep(time.Second * 1)
 
-			p := GetMessagesParams{
-				Offset: lastMsg.ID,
-				Count:  5,
-				Rev:    1,
+			p := messagesGetHistoryParams{
+				offset: lastMsg.ID,
+				count:  5,
+				rev:    1,
 			}
-			msgs, err := getMessages(p)
+			msgs, err := messagesGetHistory(p)
 
 			if err != nil {
 				panic(err)
 			}
 
-			if len(msgs) > 0 {
-				lastMsg = msgs[len(msgs)-1]
+			if len(msgs.Items) > 0 {
+				lastMsg = msgs.Items[len(msgs.Items)-1]
 			}
 
-			for _, msg := range msgs {
+			for _, msg := range msgs.Items {
 				parts := strings.Split(msg.Text, " ")
 
 				if parts[0] == MODE {
@@ -163,7 +163,11 @@ func openVkConn(id string) (*vkConn, error) {
 
 	go func() {
 		for msg := range c.send {
-			if err := sendMessage(msg); err != nil {
+			p := messagesSendParams{
+				message: msg,
+			}
+
+			if _, err := messagesSend(p); err != nil {
 				fmt.Printf("vkConn id %v: failed to send message: %v\n", c.id, err)
 				continue
 			}
