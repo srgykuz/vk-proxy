@@ -1,30 +1,29 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"sync"
 	"time"
 )
 
-var MODE = os.Getenv("MODE")
+var mode = os.Getenv("MODE")
 
 func main() {
 	var wg sync.WaitGroup
-	vkConns := map[string]*vkConn{}
+	conns := map[string]*vkConn{}
 
-	if MODE == "client" {
+	if mode == "client" {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			listenSocks(vkConns)
+			listenSocks(conns)
 		}()
 	}
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		listenChat(vkConns)
+		listenChat(conns)
 	}()
 
 	wg.Add(1)
@@ -33,13 +32,7 @@ func main() {
 
 		for {
 			time.Sleep(time.Second * 30)
-
-			for id, vk := range vkConns {
-				if vk.closed {
-					delete(vkConns, id)
-					fmt.Printf("vkConn id %v: removed\n", id)
-				}
-			}
+			clearVkConns(conns)
 		}
 	}()
 

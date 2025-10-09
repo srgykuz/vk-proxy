@@ -58,6 +58,15 @@ func openVkConn(id string) (*vkConn, error) {
 	return c, nil
 }
 
+func clearVkConns(conns map[string]*vkConn) {
+	for id, vk := range conns {
+		if vk.closed {
+			delete(conns, id)
+			fmt.Printf("vkConn id %v: removed\n", id)
+		}
+	}
+}
+
 func (c *vkConn) close() error {
 	c.closeMu.Lock()
 	defer c.closeMu.Unlock()
@@ -66,7 +75,7 @@ func (c *vkConn) close() error {
 		return nil
 	}
 
-	msg := fmt.Sprintf("%v %v CLOSE", MODE, c.id)
+	msg := fmt.Sprintf("%v %v CLOSE", mode, c.id)
 	c.send <- msg
 
 	close(c.send)
@@ -86,21 +95,21 @@ func (c *vkConn) close() error {
 }
 
 func (c *vkConn) connect(host string, port int) {
-	msg := fmt.Sprintf("%v %v CONNECT %v %v", MODE, c.id, host, port)
+	msg := fmt.Sprintf("%v %v CONNECT %v %v", mode, c.id, host, port)
 	c.send <- msg
 }
 
 func (c *vkConn) connected() {
-	msg := fmt.Sprintf("%v %v CONNECTED", MODE, c.id)
+	msg := fmt.Sprintf("%v %v CONNECTED", mode, c.id)
 	c.send <- msg
 }
 
 func (c *vkConn) error(err error) {
-	msg := fmt.Sprintf("%v %v ERROR %v", MODE, c.id, err.Error())
+	msg := fmt.Sprintf("%v %v ERROR %v", mode, c.id, err.Error())
 	c.send <- msg
 }
 
 func (c *vkConn) forward(data []byte) {
-	msg := fmt.Sprintf("%v %v FORWARD %v", MODE, c.id, base64.StdEncoding.EncodeToString(data))
+	msg := fmt.Sprintf("%v %v FORWARD %v", mode, c.id, base64.StdEncoding.EncodeToString(data))
 	c.send <- msg
 }

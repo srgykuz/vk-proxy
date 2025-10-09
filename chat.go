@@ -36,7 +36,7 @@ func listenChat(conns map[string]*vkConn) {
 		for _, msg := range msgs.Items {
 			parts := strings.Split(msg.Text, " ")
 
-			if parts[0] == MODE {
+			if parts[0] == mode {
 				continue
 			} else if parts[0] != "server" && parts[0] != "client" {
 				fmt.Println("Unknown mode:", msg.Text)
