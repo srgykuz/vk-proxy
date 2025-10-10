@@ -12,14 +12,14 @@ import (
 )
 
 var socksHost = "127.0.0.1"
-var socksPort = 1080
+var socksPort uint16 = 1080
 var socksDeadline = time.Second * 30
 var socksBufSize = 2048
 var socksLogData = false
 
 type address struct {
 	host string
-	port int
+	port uint16
 }
 
 func (a address) String() string {
@@ -48,15 +48,29 @@ func listenSocks() error {
 			continue
 		}
 
+		brg, err := openBridge(0)
+
+		if err != nil {
+			slog.Error("socks5 server", "err", err.Error())
+			conn.Close()
+			continue
+		}
+
+		setBridge(brg)
+
 		remote := conn.RemoteAddr().String()
-		slog.Debug("socks5 conn accepted", "remote", remote)
+		slog.Debug("socks5 conn accepted", "remote", remote, "bridge", brg.id)
 
 		go func() {
-			defer slog.Debug("socks5 conn closed", "remote", remote)
+			defer brg.close()
 			defer conn.Close()
 
-			if err := handleSocks(conn); err != nil {
-				slog.Error("socks5 conn", "remote", remote, "err", err.Error())
+			err := handleSocks(conn, brg)
+
+			if err == nil {
+				slog.Debug("socks5 conn closed", "remote", remote, "bridge", brg.id)
+			} else {
+				slog.Error("socks5 conn closed", "remote", remote, "bridge", brg.id, "err", err.Error())
 			}
 		}()
 	}
@@ -74,11 +88,10 @@ var (
 	errSocksPartialRead  = errors.New("partial read is not supported")
 )
 
-func handleSocks(conn net.Conn) error {
+func handleSocks(conn net.Conn, brg *bridge) error {
 	remote := conn.RemoteAddr().String()
 	buf := make([]byte, socksBufSize)
 	stage := socksStageHandshake
-	fwdTo := address{}
 
 	for {
 		conn.SetDeadline(time.Now().Add(socksDeadline))
@@ -100,11 +113,19 @@ func handleSocks(conn net.Conn) error {
 				out, err = handleSocksStageHandshake(in)
 				stage = socksStageConnect
 			case socksStageConnect:
-				fwdTo, out, err = handleSocksStageConnect(in)
+				var addr address
+				addr, out, err = handleSocksStageConnect(in)
+
+				if err == nil {
+					err = handleSocksStageConnectBridge(brg, addr)
+				}
+
 				stage = socksStageForward
+			case socksStageForward:
+				slog.Info("socks5 conn", "remote", remote, "bridge", brg.id, "bytes", len(in))
+				err = handleSocksStageForward(brg, in)
 			default:
-				slog.Info("socks5 conn", "remote", remote, "to", fwdTo.String(), "bytes", len(in))
-				return nil
+				return fmt.Errorf("unknown stage - %v", stage)
 			}
 
 			if len(out) > 0 {
@@ -198,7 +219,7 @@ func handleSocksStageConnect(in []byte) (address, []byte, error) {
 		addr = net.IP(baddr).String()
 	}
 
-	port := int(binary.BigEndian.Uint16((in[offset+naddr : offset+naddr+2])))
+	port := uint16(binary.BigEndian.Uint16((in[offset+naddr : offset+naddr+2])))
 	dst := address{
 		host: addr,
 		port: port,
@@ -209,4 +230,27 @@ func handleSocksStageConnect(in []byte) (address, []byte, error) {
 	out[1] = 0x00
 
 	return dst, out, nil
+}
+
+func handleSocksStageConnectBridge(brg *bridge, addr address) error {
+	pld := datagramPayloadConnect(addr)
+	pldb := pld.encode()
+	dg := newDatagram(brg.id, datagramCommandConnect, pldb)
+
+	if err := brg.send(dg); err != nil {
+		return err
+	}
+
+	if err := brg.wait(bridgeSignalConnected); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func handleSocksStageForward(brg *bridge, data []byte) error {
+	dg := newDatagram(brg.id, datagramCommandForward, data)
+	err := brg.send(dg)
+
+	return err
 }
