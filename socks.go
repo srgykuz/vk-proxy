@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-var socksHost = "127.0.0.1"
-var socksPort uint16 = 1080
 var socksDeadline = time.Second * 30
 var socksBufSize = 2048
 var socksLogData = false
@@ -30,8 +28,8 @@ func bytesToHex(b []byte) string {
 	return fmt.Sprintf("% x", b)
 }
 
-func listenSocks() error {
-	addr := address{host: socksHost, port: socksPort}.String()
+func listenSocks(host string, port uint16) error {
+	addr := address{host, port}.String()
 	ln, err := net.Listen("tcp", addr)
 
 	if err != nil {

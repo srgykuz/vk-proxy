@@ -3,28 +3,48 @@ package main
 import (
 	"log/slog"
 	"os"
+	"strconv"
 	"sync"
 )
 
-var mode = os.Getenv("MODE")
+var socksHost = os.Getenv("SOCKS_HOST")
+var socksPort = os.Getenv("SOCKS_PORT")
 
 func main() {
-	var wg sync.WaitGroup
-
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
-	if mode == "client" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			listenSocks()
-		}()
+	if socksHost == "" {
+		socksHost = "127.0.0.1"
 	}
+
+	if socksPort == "" {
+		socksPort = "1080"
+	}
+
+	socksPortI, err := strconv.Atoi(socksPort)
+
+	if err != nil {
+		panic(err)
+	}
+
+	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		listenChat()
+
+		if err := listenSocks(socksHost, uint16(socksPortI)); err != nil {
+			panic(err)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		if err := listenChat(); err != nil {
+			panic(err)
+		}
 	}()
 
 	wg.Wait()
