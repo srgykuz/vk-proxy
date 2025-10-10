@@ -6,27 +6,33 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 )
 
-var bridges map[int32]*bridge = map[int32]*bridge{}
-var bridgesMu sync.Mutex
-
-func getBridge(id int32) (*bridge, bool) {
-	bridgesMu.Lock()
-	defer bridgesMu.Unlock()
-
-	b, exists := bridges[id]
-
-	return b, exists
+type link struct {
+	brg  *bridge
+	peer net.Conn
 }
 
-func setBridge(b *bridge) {
-	bridgesMu.Lock()
-	defer bridgesMu.Unlock()
+var links map[int32]link = map[int32]link{}
+var linksMu sync.Mutex
 
-	bridges[b.id] = b
+func getLink(id int32) (link, bool) {
+	linksMu.Lock()
+	defer linksMu.Unlock()
+
+	l, exists := links[id]
+
+	return l, exists
+}
+
+func setLink(id int32, l link) {
+	linksMu.Lock()
+	defer linksMu.Unlock()
+
+	links[id] = l
 }
 
 var counter int32 = 0

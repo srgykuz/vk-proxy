@@ -54,7 +54,11 @@ func listenSocks(host string, port uint16) error {
 			continue
 		}
 
-		setBridge(brg)
+		lk := link{
+			brg:  brg,
+			peer: conn,
+		}
+		setLink(brg.id, lk)
 
 		remote := conn.RemoteAddr().String()
 		slog.Debug("socks5 conn accepted", "remote", remote, "bridge", brg.id)
@@ -63,7 +67,7 @@ func listenSocks(host string, port uint16) error {
 			defer brg.close()
 			defer conn.Close()
 
-			err := handleSocks(conn, brg)
+			err := handleSocks(conn, brg, socksStageHandshake)
 
 			if err == nil {
 				slog.Debug("socks5 conn closed", "remote", remote, "bridge", brg.id)
@@ -86,10 +90,9 @@ var (
 	errSocksPartialRead  = errors.New("partial read is not supported")
 )
 
-func handleSocks(conn net.Conn, brg *bridge) error {
+func handleSocks(conn net.Conn, brg *bridge, stage int) error {
 	remote := conn.RemoteAddr().String()
 	buf := make([]byte, socksBufSize)
-	stage := socksStageHandshake
 
 	for {
 		conn.SetDeadline(time.Now().Add(socksDeadline))
