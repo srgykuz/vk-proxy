@@ -11,10 +11,6 @@ import (
 	"time"
 )
 
-var socksDeadline = time.Second * 30
-var socksBufSize = 2048
-var socksLogData = false
-
 type address struct {
 	host string
 	port uint16
@@ -28,8 +24,8 @@ func bytesToHex(b []byte) string {
 	return fmt.Sprintf("% x", b)
 }
 
-func listenSocks(host string, port uint16) error {
-	addr := address{host, port}.String()
+func listenSocks(cfg config) error {
+	addr := address{cfg.Socks.ListenHost, cfg.Socks.ListenPort}.String()
 	ln, err := net.Listen("tcp", addr)
 
 	if err != nil {
@@ -46,7 +42,7 @@ func listenSocks(host string, port uint16) error {
 			continue
 		}
 
-		brg, err := openBridge(0)
+		brg, err := openBridge(cfg, 0)
 
 		if err != nil {
 			slog.Error("socks5 server", "err", err.Error())
@@ -67,7 +63,7 @@ func listenSocks(host string, port uint16) error {
 			defer brg.close()
 			defer conn.Close()
 
-			err := handleSocks(conn, brg, socksStageHandshake)
+			err := handleSocks(cfg, conn, brg, socksStageHandshake)
 
 			if err == nil {
 				slog.Debug("socks5 conn closed", "remote", remote, "bridge", brg.id)
@@ -90,19 +86,19 @@ var (
 	errSocksPartialRead  = errors.New("partial read is not supported")
 )
 
-func handleSocks(conn net.Conn, brg *bridge, stage int) error {
+func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 	remote := conn.RemoteAddr().String()
-	buf := make([]byte, socksBufSize)
+	buf := make([]byte, cfg.Socks.BufferSize)
 
 	for {
-		conn.SetDeadline(time.Now().Add(socksDeadline))
+		conn.SetDeadline(time.Now().Add(cfg.Socks.ConnectionDeadline))
 
 		n, err := conn.Read(buf)
 
 		if n > 0 {
 			in := buf[:n]
 
-			if socksLogData {
+			if cfg.Log.Payload {
 				slog.Debug("socks5 conn", "remote", remote, "in", bytesToHex(in))
 			}
 
@@ -132,7 +128,7 @@ func handleSocks(conn net.Conn, brg *bridge, stage int) error {
 			if len(out) > 0 {
 				conn.Write(out)
 
-				if socksLogData {
+				if cfg.Log.Payload {
 					slog.Debug("socks5 conn", "remote", remote, "out", bytesToHex(out))
 				}
 			}

@@ -6,15 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
-	"time"
 )
-
-var clubAccessToken = os.Getenv("CLUB_ACCESS_TOKEN")
-var userID = os.Getenv("USER_ID")
-var version = "5.199"
-var origin = "https://api.vk.ru/method"
 
 type errorResult struct {
 	ErrorCode int    `json:"error_code"`
@@ -29,17 +22,17 @@ func (r errorResult) check() error {
 	return nil
 }
 
-func createURL(path string, values url.Values) string {
+func createURL(cfg config, path string, values url.Values) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
 
-	return fmt.Sprintf("%v%v?%s", origin, path, values.Encode())
+	return fmt.Sprintf("%v%v?%s", cfg.API.Origin, path, values.Encode())
 }
 
-func do(req *http.Request) (*http.Response, error) {
+func do(cfg config, req *http.Request) (*http.Response, error) {
 	client := &http.Client{
-		Timeout: time.Second * 10,
+		Timeout: cfg.API.Timeout,
 	}
 
 	return client.Do(req)
@@ -62,22 +55,22 @@ type messagesSendResult struct {
 	Response int         `json:"response"`
 }
 
-func messagesSend(params messagesSendParams) (int, error) {
+func messagesSend(cfg config, params messagesSendParams) (int, error) {
 	values := url.Values{}
-	values.Set("access_token", clubAccessToken)
-	values.Set("v", version)
-	values.Set("user_id", userID)
+	values.Set("access_token", cfg.API.ClubAccessToken)
+	values.Set("v", cfg.API.Version)
+	values.Set("user_id", cfg.API.UserID)
 	values.Set("random_id", "0")
 	values.Set("message", params.message)
 
-	uri := createURL("messages.send", values)
+	uri := createURL(cfg, "messages.send", values)
 	req, err := http.NewRequest("POST", uri, nil)
 
 	if err != nil {
 		return 0, err
 	}
 
-	resp, err := do(req)
+	resp, err := do(cfg, req)
 
 	if err != nil {
 		return 0, err
@@ -129,23 +122,23 @@ type message struct {
 	Text string `json:"text"`
 }
 
-func messagesGetHistory(params messagesGetHistoryParams) (messagesGetHistoryResponse, error) {
+func messagesGetHistory(cfg config, params messagesGetHistoryParams) (messagesGetHistoryResponse, error) {
 	values := url.Values{}
-	values.Set("access_token", clubAccessToken)
-	values.Set("v", version)
-	values.Set("user_id", userID)
+	values.Set("access_token", cfg.API.ClubAccessToken)
+	values.Set("v", cfg.API.Version)
+	values.Set("user_id", cfg.API.UserID)
 	values.Set("offset", fmt.Sprint(params.offset))
 	values.Set("count", fmt.Sprint(params.count))
 	values.Set("rev", fmt.Sprint(params.rev))
 
-	uri := createURL("messages.getHistory", values)
+	uri := createURL(cfg, "messages.getHistory", values)
 	req, err := http.NewRequest("POST", uri, nil)
 
 	if err != nil {
 		return messagesGetHistoryResponse{}, err
 	}
 
-	resp, err := do(req)
+	resp, err := do(cfg, req)
 
 	if err != nil {
 		return messagesGetHistoryResponse{}, err
@@ -176,13 +169,13 @@ func messagesGetHistory(params messagesGetHistoryParams) (messagesGetHistoryResp
 	return result.Response, nil
 }
 
-func messagesGetLatest() (message, error) {
+func messagesGetLatest(cfg config) (message, error) {
 	p := messagesGetHistoryParams{
 		offset: 0,
 		count:  1,
 		rev:    0,
 	}
-	resp, err := messagesGetHistory(p)
+	resp, err := messagesGetHistory(cfg, p)
 
 	if err != nil {
 		return message{}, err

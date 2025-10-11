@@ -62,7 +62,7 @@ type bridge struct {
 	sigConnCl bool
 }
 
-func openBridge(id int32) (*bridge, error) {
+func openBridge(cfg config, id int32) (*bridge, error) {
 	if id == 0 {
 		id = nextID()
 	}
@@ -80,7 +80,7 @@ func openBridge(id int32) (*bridge, error) {
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
-		b.listen()
+		b.listen(cfg)
 	}()
 
 	slog.Debug("bridge: opened", "id", b.id)
@@ -110,7 +110,7 @@ func (b *bridge) close() {
 	slog.Debug("bridge: closed", "id", b.id)
 }
 
-func (b *bridge) listen() {
+func (b *bridge) listen(cfg config) {
 	for dg := range b.datagrams {
 		s := encodeDatagram(dg)
 		p := messagesSendParams{
@@ -119,7 +119,7 @@ func (b *bridge) listen() {
 
 		slog.Debug("bridge: sending", "sid", dg.session, "cmd", dg.command, "pld", len(dg.payload))
 
-		if _, err := messagesSend(p); err != nil {
+		if _, err := messagesSend(cfg, p); err != nil {
 			slog.Error("bridge: sending failed", "err", err, "sid", dg.session, "cmd", dg.command, "pld", len(dg.payload))
 		}
 	}
