@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,45 @@ import (
 	"net/url"
 	"strings"
 )
+
+func apiURL(cfg config, method string, values url.Values) string {
+	method = strings.TrimPrefix(method, "/")
+
+	return fmt.Sprintf("%v/method/%v?%s", cfg.API.Origin, method, values.Encode())
+}
+
+func apiValues(cfg config) url.Values {
+	return url.Values{
+		"v":            []string{cfg.API.Version},
+		"access_token": []string{cfg.API.ClubAccessToken},
+	}
+}
+
+func apiDo(cfg config, req *http.Request) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(req.Context(), cfg.API.Timeout)
+	defer cancel()
+
+	req = req.WithContext(ctx)
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %v", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, fmt.Errorf("read response: %v", err)
+	}
+
+	return data, nil
+}
 
 type errorResult struct {
 	ErrorCode int    `json:"error_code"`
@@ -17,30 +57,6 @@ type errorResult struct {
 func (r errorResult) check() error {
 	if r.ErrorCode != 0 {
 		return fmt.Errorf("code %d: %s", r.ErrorCode, r.ErrorMsg)
-	}
-
-	return nil
-}
-
-func createURL(cfg config, path string, values url.Values) string {
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-
-	return fmt.Sprintf("%v%v?%s", cfg.API.Origin, path, values.Encode())
-}
-
-func do(cfg config, req *http.Request) (*http.Response, error) {
-	client := &http.Client{
-		Timeout: cfg.API.Timeout,
-	}
-
-	return client.Do(req)
-}
-
-func check(resp *http.Response) error {
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %v", resp.StatusCode)
 	}
 
 	return nil
@@ -56,33 +72,20 @@ type messagesSendResult struct {
 }
 
 func messagesSend(cfg config, params messagesSendParams) (int, error) {
-	values := url.Values{}
-	values.Set("access_token", cfg.API.ClubAccessToken)
-	values.Set("v", cfg.API.Version)
+	values := apiValues(cfg)
+
 	values.Set("user_id", cfg.API.UserID)
 	values.Set("random_id", "0")
 	values.Set("message", params.message)
 
-	uri := createURL(cfg, "messages.send", values)
-	req, err := http.NewRequest("POST", uri, nil)
+	uri := apiURL(cfg, "messages.send", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
 
 	if err != nil {
 		return 0, err
 	}
 
-	resp, err := do(cfg, req)
-
-	if err != nil {
-		return 0, err
-	}
-
-	defer resp.Body.Close()
-
-	if err := check(resp); err != nil {
-		return 0, err
-	}
-
-	data, err := io.ReadAll(resp.Body)
+	data, err := apiDo(cfg, req)
 
 	if err != nil {
 		return 0, err
@@ -123,34 +126,21 @@ type message struct {
 }
 
 func messagesGetHistory(cfg config, params messagesGetHistoryParams) (messagesGetHistoryResponse, error) {
-	values := url.Values{}
-	values.Set("access_token", cfg.API.ClubAccessToken)
-	values.Set("v", cfg.API.Version)
+	values := apiValues(cfg)
+
 	values.Set("user_id", cfg.API.UserID)
 	values.Set("offset", fmt.Sprint(params.offset))
 	values.Set("count", fmt.Sprint(params.count))
 	values.Set("rev", fmt.Sprint(params.rev))
 
-	uri := createURL(cfg, "messages.getHistory", values)
-	req, err := http.NewRequest("POST", uri, nil)
+	uri := apiURL(cfg, "messages.getHistory", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
 
 	if err != nil {
 		return messagesGetHistoryResponse{}, err
 	}
 
-	resp, err := do(cfg, req)
-
-	if err != nil {
-		return messagesGetHistoryResponse{}, err
-	}
-
-	defer resp.Body.Close()
-
-	if err := check(resp); err != nil {
-		return messagesGetHistoryResponse{}, err
-	}
-
-	data, err := io.ReadAll(resp.Body)
+	data, err := apiDo(cfg, req)
 
 	if err != nil {
 		return messagesGetHistoryResponse{}, err
@@ -182,7 +172,7 @@ func messagesGetLatest(cfg config) (message, error) {
 	}
 
 	if len(resp.Items) == 0 {
-		return message{}, fmt.Errorf("no messages found")
+		return message{}, fmt.Errorf("chat is empty")
 	}
 
 	return resp.Items[0], nil

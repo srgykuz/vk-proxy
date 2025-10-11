@@ -97,7 +97,7 @@ func defaultConfig() config {
 			BufferSize:         2048,
 		},
 		API: configAPI{
-			Origin:  "https://api.vk.ru/method",
+			Origin:  "https://api.vk.ru",
 			Version: "5.199",
 			Timeout: 10 * time.Second,
 		},
