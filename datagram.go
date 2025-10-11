@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+const (
+	commandConnect int16 = iota + 1
+	commandConnected
+	commandForward
+)
+
 var deviceID = time.Now().UnixMilli()
 
 type datagram struct {
@@ -27,6 +33,16 @@ func (dg datagram) clone() datagram {
 	dg.payload = pld
 
 	return dg
+}
+
+func newDatagram(ses int32, cmd int16, pld []byte) datagram {
+	return datagram{
+		version: 1,
+		device:  deviceID,
+		session: ses,
+		command: cmd,
+		payload: pld,
+	}
 }
 
 func encodeDatagram(dg datagram) string {
@@ -71,35 +87,19 @@ func decodeDatagram(s string) (datagram, error) {
 	return dg, nil
 }
 
-const (
-	datagramCommandConnect int16 = iota + 1
-	datagramCommandConnected
-	datagramCommandForward
-)
-
-func newDatagram(ses int32, cmd int16, pld []byte) datagram {
-	return datagram{
-		version: 1,
-		device:  deviceID,
-		session: ses,
-		command: cmd,
-		payload: pld,
-	}
-}
-
-type datagramPayloadConnect struct {
+type payloadConnect struct {
 	host string
 	port uint16
 }
 
-func (pld *datagramPayloadConnect) encode() []byte {
+func (pld *payloadConnect) encode() []byte {
 	data := []byte(pld.host)
 	data = binary.BigEndian.AppendUint16(data, pld.port)
 
 	return data
 }
 
-func (pld *datagramPayloadConnect) decode(data []byte) error {
+func (pld *payloadConnect) decode(data []byte) error {
 	if len(data) < 2 {
 		return errors.New("malformed payload")
 	}

@@ -88,11 +88,11 @@ func handleDatagram(cfg config, dg datagram) error {
 	}
 
 	switch dg.command {
-	case datagramCommandConnect:
+	case commandConnect:
 		return handleDatagramCommandConnect(cfg, lk, dg)
-	case datagramCommandConnected:
+	case commandConnected:
 		return handleDatagramCommandConnected(lk)
-	case datagramCommandForward:
+	case commandForward:
 		return handleDatagramCommandForward(cfg, lk, dg)
 	default:
 		return fmt.Errorf("unknown command - %v", dg.command)
@@ -104,7 +104,7 @@ func handleDatagramCommandConnect(cfg config, lk link, dg datagram) error {
 		return errors.New("invalid link")
 	}
 
-	pld := datagramPayloadConnect{}
+	pld := payloadConnect{}
 
 	if err := pld.decode(dg.payload); err != nil {
 		return err
@@ -134,7 +134,7 @@ func handleDatagramCommandConnect(cfg config, lk link, dg datagram) error {
 		}
 	}()
 
-	back := newDatagram(lk.brg.id, datagramCommandConnected, nil)
+	back := newDatagram(lk.brg.id, commandConnected, nil)
 
 	if err := lk.brg.send(back); err != nil {
 		return err
