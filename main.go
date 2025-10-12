@@ -109,18 +109,18 @@ func defaultConfig() config {
 		Socks: configSocks{
 			ListenHost:           "127.0.0.1",
 			ListenPort:           1080,
-			ConnectionDeadlineMS: 30000,
+			ConnectionDeadlineMS: 15000,
 			BufferSize:           4096,
 			ChunkMaxSize:         3000,
 		},
 		API: configAPI{
 			Origin:    "https://api.vk.ru",
 			Version:   "5.199",
-			TimeoutMS: 10000,
+			TimeoutMS: 7000,
 		},
 		Chat: configChat{
 			CheckIntervalMS: 1000,
-			FetchCount:      5,
+			FetchCount:      10,
 		},
 	}
 }
