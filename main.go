@@ -28,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.SetLogLoggerLevel(cfg.Log.Level)
+	slog.SetLogLoggerLevel(slog.Level(cfg.Log.Level))
 
 	var wg sync.WaitGroup
 
@@ -63,8 +63,8 @@ type config struct {
 }
 
 type configLog struct {
-	Level   slog.Level `json:"level"`
-	Payload bool       `json:"payload"`
+	Level   int  `json:"level"`
+	Payload bool `json:"payload"`
 }
 
 type configSocks struct {
@@ -102,6 +102,9 @@ func (cfg configChat) CheckInterval() time.Duration {
 
 func defaultConfig() config {
 	return config{
+		Log: configLog{
+			Level: 0,
+		},
 		Socks: configSocks{
 			ListenHost:           "127.0.0.1",
 			ListenPort:           1080,
