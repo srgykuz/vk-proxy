@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -247,6 +248,10 @@ type address struct {
 }
 
 func (a address) String() string {
+	if strings.Contains(a.host, ":") {
+		return fmt.Sprintf("[%v]:%v", a.host, a.port)
+	}
+
 	return fmt.Sprintf("%v:%v", a.host, a.port)
 }
 
