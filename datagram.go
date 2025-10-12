@@ -9,7 +9,6 @@ import (
 
 const (
 	commandConnect int16 = iota + 1
-	commandConnected
 	commandForward
 )
 

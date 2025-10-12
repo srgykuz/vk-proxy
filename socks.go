@@ -228,7 +228,7 @@ func handleSocksStageConnectBridge(brg *bridge, addr address) error {
 		return err
 	}
 
-	if err := brg.wait(bridgeSignalConnected); err != nil {
+	if err := brg.signal(bridgeSignalConnected); err != nil {
 		return err
 	}
 

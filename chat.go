@@ -90,8 +90,6 @@ func handleDatagram(cfg config, dg datagram) error {
 	switch dg.command {
 	case commandConnect:
 		return handleDatagramCommandConnect(cfg, lk, dg)
-	case commandConnected:
-		return handleDatagramCommandConnected(lk)
 	case commandForward:
 		return handleDatagramCommandForward(cfg, lk, dg)
 	default:
@@ -134,9 +132,7 @@ func handleDatagramCommandConnect(cfg config, lk link, dg datagram) error {
 		}
 	}()
 
-	back := newDatagram(lk.brg.id, commandConnected, nil)
-
-	if err := lk.brg.send(back); err != nil {
+	if err := lk.brg.signal(bridgeSignalConnected); err != nil {
 		return err
 	}
 
@@ -145,23 +141,13 @@ func handleDatagramCommandConnect(cfg config, lk link, dg datagram) error {
 	return nil
 }
 
-func handleDatagramCommandConnected(lk link) error {
-	if lk.brg == nil {
-		return errors.New("invalid link")
-	}
-
-	if err := lk.brg.signal(bridgeSignalConnected); err != nil {
-		return err
-	}
-
-	slog.Debug("chat: confirm connection", "bridge", lk.brg.id)
-
-	return nil
-}
-
 func handleDatagramCommandForward(cfg config, lk link, dg datagram) error {
 	if lk.brg == nil || lk.peer == nil {
 		return errors.New("invalid link")
+	}
+
+	if err := lk.brg.wait(bridgeSignalConnected); err != nil {
+		return err
 	}
 
 	slog.Debug("chat: forwarding", "bridge", lk.brg.id, "pld", len(dg.payload))
