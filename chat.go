@@ -15,7 +15,7 @@ func listenChat(cfg config) error {
 		return err
 	}
 
-	slog.Info("chat: listening", "last", last.Text)
+	slog.Info("chat: listening")
 
 	for {
 		time.Sleep(cfg.Chat.CheckInterval())
@@ -28,7 +28,7 @@ func listenChat(cfg config) error {
 		resp, err := messagesGetHistory(cfg, p)
 
 		if err != nil {
-			slog.Error("chat: unable to get new messages", "err", err)
+			slog.Error("chat: get new messages", "err", err)
 			continue
 		}
 
@@ -40,7 +40,7 @@ func listenChat(cfg config) error {
 
 		for _, msg := range resp.Items {
 			if err := handleMessage(cfg, msg); err != nil {
-				slog.Error("chat: can't handle message", "err", err, "text", msg.Text)
+				slog.Error("chat: handle", "msg", msg.ID, "err", err)
 			}
 		}
 	}
@@ -50,25 +50,19 @@ func handleMessage(cfg config, msg message) error {
 	dg, err := decodeDatagram(msg.Text)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("decode datagram: %v", err)
 	}
 
 	if dg.isLoopback() {
 		return nil
 	}
 
+	slog.Debug("chat: handle", "msg", msg.ID, "ses", dg.session, "cmd", dg.command, "pld", len(dg.payload))
+
 	if cfg.Log.Payload {
-		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text)
+		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text, "payload", bytesToHex(dg.payload))
 	}
 
-	if err := handleDatagram(cfg, dg); err != nil {
-		slog.Error("chat: can't handle datagram", "err", err, "message id", msg.ID)
-	}
-
-	return nil
-}
-
-func handleDatagram(cfg config, dg datagram) error {
 	var lk link
 	var exists bool
 
@@ -78,7 +72,7 @@ func handleDatagram(cfg config, dg datagram) error {
 		brg, err := openBridge(cfg, dg.session)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("open bridge: %v", err)
 		}
 
 		lk = link{
@@ -89,17 +83,23 @@ func handleDatagram(cfg config, dg datagram) error {
 
 	switch dg.command {
 	case commandConnect:
-		return handleDatagramCommandConnect(cfg, lk, dg)
+		err = handleCommandConnect(cfg, lk, dg)
 	case commandForward:
-		return handleDatagramCommandForward(cfg, lk, dg)
+		err = handleCommandForward(cfg, lk, dg)
 	default:
-		return fmt.Errorf("unknown command - %v", dg.command)
+		return fmt.Errorf("unknown command: %v", dg.command)
 	}
+
+	if err != nil {
+		return fmt.Errorf("command %v: %v", dg.command, err)
+	}
+
+	return nil
 }
 
-func handleDatagramCommandConnect(cfg config, lk link, dg datagram) error {
+func handleCommandConnect(cfg config, lk link, dg datagram) error {
 	if lk.brg == nil {
-		return errors.New("invalid link")
+		return errors.New("link is misconfigured")
 	}
 
 	pld := payloadConnect{}
@@ -118,47 +118,25 @@ func handleDatagramCommandConnect(cfg config, lk link, dg datagram) error {
 	lk.peer = conn
 	setLink(lk.brg.id, lk)
 
-	go func() {
-		defer lk.brg.close()
-		defer lk.peer.Close()
-
-		remote := lk.peer.RemoteAddr().String()
-		err := handleSocks(cfg, lk.peer, lk.brg, stageForward)
-
-		if err == nil {
-			slog.Debug("socks5 conn closed", "remote", remote, "bridge", lk.brg.id)
-		} else {
-			slog.Error("socks5 conn closed", "remote", remote, "bridge", lk.brg.id, "err", err.Error())
-		}
-	}()
+	go acceptSocks(cfg, lk.peer, lk.brg, stageForward)
 
 	if err := lk.brg.signal(bridgeSignalConnected); err != nil {
 		return err
 	}
 
-	slog.Debug("chat: connected", "bridge", lk.brg.id, "addr", addr)
-
 	return nil
 }
 
-func handleDatagramCommandForward(cfg config, lk link, dg datagram) error {
+func handleCommandForward(cfg config, lk link, dg datagram) error {
 	if lk.brg == nil || lk.peer == nil {
-		return errors.New("invalid link")
+		return errors.New("link is misconfigured")
 	}
 
 	if err := lk.brg.wait(bridgeSignalConnected); err != nil {
 		return err
 	}
 
-	slog.Debug("chat: forwarding", "bridge", lk.brg.id, "pld", len(dg.payload))
+	err := writeSocks(cfg, lk.peer, dg.payload)
 
-	if err := lk.peer.SetWriteDeadline(time.Now().Add(cfg.Socks.ConnectionDeadline())); err != nil {
-		return err
-	}
-
-	if _, err := lk.peer.Write(dg.payload); err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }

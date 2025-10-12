@@ -50,27 +50,29 @@ func listenSocks(cfg config) error {
 			continue
 		}
 
-		remote := conn.RemoteAddr().String()
-		slog.Debug("socks: accepted", "remote", remote, "bridge", brg.id)
-
 		lk := link{
 			brg:  brg,
 			peer: conn,
 		}
 		setLink(brg.id, lk)
 
-		go func() {
-			defer brg.close()
-			defer conn.Close()
+		go acceptSocks(cfg, conn, brg, stageHandshake)
+	}
+}
 
-			err := handleSocks(cfg, conn, brg, stageHandshake)
+func acceptSocks(cfg config, conn net.Conn, brg *bridge, stage int) {
+	defer brg.close()
+	defer conn.Close()
 
-			if err == nil {
-				slog.Debug("socks: closed", "remote", remote, "bridge", brg.id)
-			} else {
-				slog.Error("socks: closed", "remote", remote, "bridge", brg.id, "err", err)
-			}
-		}()
+	remote := conn.RemoteAddr().String()
+	slog.Debug("socks: accepted", "remote", remote, "bridge", brg.id)
+
+	err := handleSocks(cfg, conn, brg, stage)
+
+	if err == nil {
+		slog.Debug("socks: closed", "remote", remote, "bridge", brg.id)
+	} else {
+		slog.Error("socks: closed", "remote", remote, "bridge", brg.id, "err", err)
 	}
 }
 
@@ -79,12 +81,18 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 	buf := make([]byte, cfg.Socks.BufferSize)
 
 	for {
-		conn.SetDeadline(time.Now().Add(cfg.Socks.ConnectionDeadline()))
+		deadline := time.Now().Add(cfg.Socks.ConnectionDeadline())
+
+		if err := conn.SetReadDeadline(deadline); err != nil {
+			return err
+		}
 
 		n, readErr := conn.Read(buf)
 
 		if n > 0 {
 			in := buf[:n]
+
+			slog.Debug("socks: read", "remote", remote, "len", len(in))
 
 			if cfg.Log.Payload {
 				slog.Debug("socks: payload", "remote", remote, "in", bytesToHex(in))
@@ -107,19 +115,15 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 
 				stage = stageForward
 			case stageForward:
-				slog.Info("socks: forwarding", "remote", remote, "bridge", brg.id, "bytes", len(in))
+				slog.Debug("socks: forward", "bridge", brg.id, "len", len(in))
 				err = handleSocksStageForward(in, brg)
 			default:
 				err = fmt.Errorf("unknown stage: %v", stage)
 			}
 
 			if len(out) > 0 {
-				if cfg.Log.Payload {
-					slog.Debug("socks: payload", "remote", remote, "out", bytesToHex(out))
-				}
-
-				if _, e := conn.Write(out); e != nil && err == nil {
-					err = e
+				if writeErr := writeSocks(cfg, conn, out); writeErr != nil && err == nil {
+					err = writeErr
 				}
 			}
 
@@ -136,6 +140,26 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 			return readErr
 		}
 	}
+}
+
+func writeSocks(cfg config, conn net.Conn, out []byte) error {
+	remote := conn.RemoteAddr().String()
+
+	slog.Debug("socks: write", "remote", remote, "len", len(out))
+
+	if cfg.Log.Payload {
+		slog.Debug("socks: payload", "remote", remote, "out", bytesToHex(out))
+	}
+
+	deadline := time.Now().Add(cfg.Socks.ConnectionDeadline())
+
+	if err := conn.SetWriteDeadline(deadline); err != nil {
+		return err
+	}
+
+	_, err := conn.Write(out)
+
+	return err
 }
 
 func handleSocksStageHandshake(in []byte) ([]byte, error) {
