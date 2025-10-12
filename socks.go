@@ -116,7 +116,7 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 				stage = stageForward
 			case stageForward:
 				slog.Debug("socks: forward", "bridge", brg.id, "len", len(in))
-				err = handleSocksStageForward(in, brg)
+				err = handleSocksStageForward(in, brg, cfg.Socks.ChunkMaxSize)
 			default:
 				err = fmt.Errorf("unknown stage: %v", stage)
 			}
@@ -259,11 +259,18 @@ func handleSocksStageConnectBridge(brg *bridge, addr address) error {
 	return nil
 }
 
-func handleSocksStageForward(in []byte, brg *bridge) error {
-	dg := newDatagram(brg.id, commandForward, in)
-	err := brg.send(dg)
+func handleSocksStageForward(in []byte, brg *bridge, chunkSize int) error {
+	chunks := bytesToChunks(in, chunkSize)
 
-	return err
+	for _, chunk := range chunks {
+		dg := newDatagram(brg.id, commandForward, chunk)
+
+		if err := brg.send(dg); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type address struct {
@@ -281,4 +288,16 @@ func (a address) String() string {
 
 func bytesToHex(b []byte) string {
 	return fmt.Sprintf("% x", b)
+}
+
+func bytesToChunks(b []byte, size int) [][]byte {
+	chunks := [][]byte{}
+
+	for start := 0; start < len(b); start += size {
+		end := min(start+size, len(b))
+		chunk := b[start:end]
+		chunks = append(chunks, chunk)
+	}
+
+	return chunks
 }

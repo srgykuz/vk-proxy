@@ -72,6 +72,7 @@ type configSocks struct {
 	ListenPort           uint16 `json:"listenPort"`
 	ConnectionDeadlineMS int    `json:"connectionDeadline"`
 	BufferSize           int    `json:"bufferSize"`
+	ChunkMaxSize         int    `json:"chunkMaxSize"`
 }
 
 func (cfg configSocks) ConnectionDeadline() time.Duration {
@@ -109,7 +110,8 @@ func defaultConfig() config {
 			ListenHost:           "127.0.0.1",
 			ListenPort:           1080,
 			ConnectionDeadlineMS: 30000,
-			BufferSize:           2048,
+			BufferSize:           4096,
+			ChunkMaxSize:         3000,
 		},
 		API: configAPI{
 			Origin:    "https://api.vk.ru",
