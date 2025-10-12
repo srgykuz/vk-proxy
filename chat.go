@@ -125,7 +125,7 @@ func handleDatagramCommandConnect(cfg config, lk link, dg datagram) error {
 		defer lk.peer.Close()
 
 		remote := lk.peer.RemoteAddr().String()
-		err := handleSocks(cfg, lk.peer, lk.brg, socksStageForward)
+		err := handleSocks(cfg, lk.peer, lk.brg, stageForward)
 
 		if err == nil {
 			slog.Debug("socks5 conn closed", "remote", remote, "bridge", lk.brg.id)
