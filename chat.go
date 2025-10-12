@@ -18,7 +18,7 @@ func listenChat(cfg config) error {
 	slog.Info("chat: listening", "last", last.Text)
 
 	for {
-		time.Sleep(cfg.Chat.CheckInterval)
+		time.Sleep(cfg.Chat.CheckInterval())
 
 		p := messagesGetHistoryParams{
 			offset: last.ID + cfg.Chat.FetchOffset,
@@ -166,7 +166,7 @@ func handleDatagramCommandForward(cfg config, lk link, dg datagram) error {
 
 	slog.Debug("chat: forwarding", "bridge", lk.brg.id, "pld", len(dg.payload))
 
-	if err := lk.peer.SetWriteDeadline(time.Now().Add(cfg.Socks.ConnectionDeadline)); err != nil {
+	if err := lk.peer.SetWriteDeadline(time.Now().Add(cfg.Socks.ConnectionDeadline())); err != nil {
 		return err
 	}
 

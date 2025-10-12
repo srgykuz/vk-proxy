@@ -24,7 +24,7 @@ func apiValues(cfg config) url.Values {
 }
 
 func apiDo(cfg config, req *http.Request) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(req.Context(), cfg.API.Timeout)
+	ctx, cancel := context.WithTimeout(req.Context(), cfg.API.Timeout())
 	defer cancel()
 
 	req = req.WithContext(ctx)

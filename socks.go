@@ -78,7 +78,7 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 	buf := make([]byte, cfg.Socks.BufferSize)
 
 	for {
-		conn.SetDeadline(time.Now().Add(cfg.Socks.ConnectionDeadline))
+		conn.SetDeadline(time.Now().Add(cfg.Socks.ConnectionDeadline()))
 
 		n, readErr := conn.Read(buf)
 

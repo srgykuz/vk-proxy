@@ -68,42 +68,54 @@ type configLog struct {
 }
 
 type configSocks struct {
-	ListenHost         string        `json:"listenHost"`
-	ListenPort         uint16        `json:"listenPort"`
-	ConnectionDeadline time.Duration `json:"connectionDeadline"`
-	BufferSize         int           `json:"bufferSize"`
+	ListenHost           string `json:"listenHost"`
+	ListenPort           uint16 `json:"listenPort"`
+	ConnectionDeadlineMS int    `json:"connectionDeadline"`
+	BufferSize           int    `json:"bufferSize"`
+}
+
+func (cfg configSocks) ConnectionDeadline() time.Duration {
+	return time.Duration(cfg.ConnectionDeadlineMS) * time.Millisecond
 }
 
 type configAPI struct {
-	Origin          string        `json:"origin"`
-	Version         string        `json:"version"`
-	Timeout         time.Duration `json:"timeout"`
-	UserID          string        `json:"userID"`
-	ClubAccessToken string        `json:"clubAccessToken"`
+	Origin          string `json:"origin"`
+	Version         string `json:"version"`
+	TimeoutMS       int    `json:"timeout"`
+	UserID          string `json:"userID"`
+	ClubAccessToken string `json:"clubAccessToken"`
+}
+
+func (cfg configAPI) Timeout() time.Duration {
+	return time.Duration(cfg.TimeoutMS) * time.Millisecond
 }
 
 type configChat struct {
-	CheckInterval time.Duration `json:"checkInterval"`
-	FetchCount    int           `json:"fetchCount"`
-	FetchOffset   int           `json:"fetchOffset"`
+	CheckIntervalMS int `json:"checkInterval"`
+	FetchCount      int `json:"fetchCount"`
+	FetchOffset     int `json:"fetchOffset"`
+}
+
+func (cfg configChat) CheckInterval() time.Duration {
+	return time.Duration(cfg.CheckIntervalMS) * time.Millisecond
 }
 
 func defaultConfig() config {
 	return config{
 		Socks: configSocks{
-			ListenHost:         "127.0.0.1",
-			ListenPort:         1080,
-			ConnectionDeadline: 30 * time.Second,
-			BufferSize:         2048,
+			ListenHost:           "127.0.0.1",
+			ListenPort:           1080,
+			ConnectionDeadlineMS: 30000,
+			BufferSize:           2048,
 		},
 		API: configAPI{
-			Origin:  "https://api.vk.ru",
-			Version: "5.199",
-			Timeout: 10 * time.Second,
+			Origin:    "https://api.vk.ru",
+			Version:   "5.199",
+			TimeoutMS: 10000,
 		},
 		Chat: configChat{
-			CheckInterval: 1 * time.Second,
-			FetchCount:    5,
+			CheckIntervalMS: 1000,
+			FetchCount:      5,
 		},
 	}
 }
