@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -76,9 +78,44 @@ func acceptSocks(cfg config, conn net.Conn, brg *bridge, stage int) {
 	}
 }
 
+type readBuffer struct {
+	b    *bytes.Buffer
+	mu   *sync.Mutex
+	done chan struct{}
+	errs []error
+}
+
 func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
+	var wg sync.WaitGroup
+	var err error
+	buf := readBuffer{
+		b:    &bytes.Buffer{},
+		mu:   &sync.Mutex{},
+		done: make(chan struct{}),
+		errs: []error{},
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(buf.done)
+		err = readSocks(cfg, conn, buf, stage, brg)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		forwardsSocks(cfg, buf, brg)
+	}()
+
+	wg.Wait()
+
+	return err
+}
+
+func readSocks(cfg config, conn net.Conn, buf readBuffer, stage int, brg *bridge) error {
 	remote := conn.RemoteAddr().String()
-	buf := make([]byte, cfg.Socks.BufferSize)
+	temp := make([]byte, cfg.Socks.ReadSize)
 
 	for {
 		deadline := time.Now().Add(cfg.Socks.ConnectionDeadline())
@@ -87,10 +124,10 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 			return err
 		}
 
-		n, readErr := conn.Read(buf)
+		readN, readErr := conn.Read(temp)
 
-		if n > 0 {
-			in := buf[:n]
+		if readN > 0 {
+			in := temp[:readN]
 
 			slog.Debug("socks: read", "remote", remote, "len", len(in))
 
@@ -115,8 +152,15 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 
 				stage = stageForward
 			case stageForward:
-				slog.Debug("socks: forward", "bridge", brg.id, "len", len(in))
-				err = handleSocksStageForward(in, brg, cfg.Socks.ChunkMaxSize)
+				buf.mu.Lock()
+
+				if len(buf.errs) > 0 {
+					err = buf.errs[0]
+				} else {
+					buf.b.Write(in)
+				}
+
+				buf.mu.Unlock()
 			default:
 				err = fmt.Errorf("unknown stage: %v", stage)
 			}
@@ -138,6 +182,47 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 
 		if readErr != nil {
 			return readErr
+		}
+	}
+}
+
+func forwardsSocks(cfg config, buf readBuffer, brg *bridge) {
+	interval := cfg.Socks.ForwardInterval()
+
+	for {
+		stop := false
+
+		select {
+		case <-buf.done:
+			stop = true
+		case <-time.After(interval):
+		}
+
+		var in []byte
+
+		buf.mu.Lock()
+
+		if buf.b.Len() > 0 {
+			in = buf.b.Bytes()
+			buf.b.Reset()
+		}
+
+		buf.mu.Unlock()
+
+		if len(in) > 0 {
+			slog.Debug("socks: forward", "bridge", brg.id, "len", len(in))
+
+			err := handleSocksStageForward(in, brg, cfg.Socks.ChunkSize)
+
+			if err != nil {
+				buf.mu.Lock()
+				buf.errs = append(buf.errs, err)
+				buf.mu.Unlock()
+			}
+		}
+
+		if stop {
+			return
 		}
 	}
 }
