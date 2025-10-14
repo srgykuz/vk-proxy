@@ -103,7 +103,6 @@ func (s *session) close() {
 		slog.Debug("session: close", "id", s.id)
 	} else {
 		slog.Debug("session: close", "id", s.id, "peer", s.peer.RemoteAddr().String())
-		s.peer.Close()
 	}
 
 	if !s.sigConnCl {
@@ -115,6 +114,10 @@ func (s *session) close() {
 	close(s.messages)
 
 	s.wg.Wait()
+
+	if s.peer != nil {
+		s.peer.Close()
+	}
 
 	s.closed = true
 }
