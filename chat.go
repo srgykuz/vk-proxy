@@ -57,7 +57,7 @@ func handleMessage(cfg config, msg message) error {
 		return nil
 	}
 
-	slog.Debug("chat: handle", "msg", msg.ID, "ses", dg.session, "num", dg.number, "cmd", dg.command, "pld", len(dg.payload))
+	slog.Debug("chat: handle", "msg", msg.ID, "dg", dg)
 
 	if cfg.Log.Payload {
 		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text, "payload", bytesToHex(dg.payload))

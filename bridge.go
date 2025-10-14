@@ -119,10 +119,10 @@ func (b *bridge) listen(cfg config) {
 			message: s,
 		}
 
-		slog.Debug("bridge: sending", "sid", dg.session, "num", dg.number, "cmd", dg.command, "pld", len(dg.payload))
+		slog.Debug("bridge: sending", "dg", dg)
 
 		if _, err := messagesSend(cfg, p); err != nil {
-			slog.Error("bridge: sending failed", "err", err, "sid", dg.session, "num", dg.number, "cmd", dg.command, "pld", len(dg.payload))
+			slog.Error("bridge: sending failed", "err", err, "dg", dg)
 		}
 	}
 }

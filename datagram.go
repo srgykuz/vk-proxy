@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -22,6 +23,15 @@ type datagram struct {
 	number  int32
 	command int16
 	payload []byte
+}
+
+func (dg datagram) String() string {
+	devShort := dg.device % 1000
+
+	return fmt.Sprintf(
+		"ver=%v dev=%v ses=%v num=%v cmd=%v pld=%v",
+		dg.version, devShort, dg.session, dg.number, dg.command, len(dg.payload),
+	)
 }
 
 func (dg datagram) isLoopback() bool {
