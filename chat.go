@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -85,7 +86,7 @@ func handleMessage(cfg config, msg message) error {
 	case commandClose:
 		handleCommandClose(ses, false)
 	default:
-		return fmt.Errorf("unknown command: %v", dg.command)
+		err = errors.New("unknown")
 	}
 
 	if err != nil {
