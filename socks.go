@@ -329,9 +329,10 @@ func handleSocksStageConnect(in []byte) (address, []byte, error) {
 }
 
 func handleSocksStageConnectBridge(brg *bridge, addr address) error {
+	num := brg.nextNumber()
 	pld := payloadConnect(addr)
 	b := pld.encode()
-	dg := newDatagram(brg.id, commandConnect, b)
+	dg := newDatagram(brg.id, num, commandConnect, b)
 
 	if err := brg.send(dg); err != nil {
 		return err
@@ -348,7 +349,8 @@ func handleSocksStageForward(in []byte, brg *bridge, chunkSize int) error {
 	chunks := bytesToChunks(in, chunkSize)
 
 	for _, chunk := range chunks {
-		dg := newDatagram(brg.id, commandForward, chunk)
+		num := brg.nextNumber()
+		dg := newDatagram(brg.id, num, commandForward, chunk)
 
 		if err := brg.send(dg); err != nil {
 			return err

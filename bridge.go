@@ -60,6 +60,7 @@ type bridge struct {
 	datagrams chan datagram
 	sigConn   chan struct{}
 	sigConnCl bool
+	number    int32
 }
 
 func openBridge(cfg config, id int32) (*bridge, error) {
@@ -75,6 +76,7 @@ func openBridge(cfg config, id int32) (*bridge, error) {
 		datagrams: make(chan datagram, 50),
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
+		number:    0,
 	}
 
 	b.wg.Add(1)
@@ -117,10 +119,10 @@ func (b *bridge) listen(cfg config) {
 			message: s,
 		}
 
-		slog.Debug("bridge: sending", "sid", dg.session, "cmd", dg.command, "pld", len(dg.payload))
+		slog.Debug("bridge: sending", "sid", dg.session, "num", dg.number, "cmd", dg.command, "pld", len(dg.payload))
 
 		if _, err := messagesSend(cfg, p); err != nil {
-			slog.Error("bridge: sending failed", "err", err, "sid", dg.session, "cmd", dg.command, "pld", len(dg.payload))
+			slog.Error("bridge: sending failed", "err", err, "sid", dg.session, "num", dg.number, "cmd", dg.command, "pld", len(dg.payload))
 		}
 	}
 }
@@ -184,4 +186,13 @@ func (b *bridge) wait(sig int) error {
 	}
 
 	return nil
+}
+
+func (b *bridge) nextNumber() int32 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.number++
+
+	return b.number
 }

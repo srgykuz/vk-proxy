@@ -57,7 +57,7 @@ func handleMessage(cfg config, msg message) error {
 		return nil
 	}
 
-	slog.Debug("chat: handle", "msg", msg.ID, "ses", dg.session, "cmd", dg.command, "pld", len(dg.payload))
+	slog.Debug("chat: handle", "msg", msg.ID, "ses", dg.session, "num", dg.number, "cmd", dg.command, "pld", len(dg.payload))
 
 	if cfg.Log.Payload {
 		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text, "payload", bytesToHex(dg.payload))
@@ -150,7 +150,8 @@ func handleCommandForward(cfg config, lk link, dg datagram) error {
 func handleCommandClose(lk link, notify bool) {
 	if lk.brg != nil {
 		if notify {
-			dg := newDatagram(lk.brg.id, commandClose, nil)
+			num := lk.brg.nextNumber()
+			dg := newDatagram(lk.brg.id, num, commandClose, nil)
 			lk.brg.send(dg)
 		}
 

@@ -19,6 +19,7 @@ type datagram struct {
 	version int16
 	device  int64
 	session int32
+	number  int32
 	command int16
 	payload []byte
 }
@@ -35,11 +36,12 @@ func (dg datagram) clone() datagram {
 	return dg
 }
 
-func newDatagram(ses int32, cmd int16, pld []byte) datagram {
+func newDatagram(ses int32, num int32, cmd int16, pld []byte) datagram {
 	return datagram{
 		version: 1,
 		device:  deviceID,
 		session: ses,
+		number:  num,
 		command: cmd,
 		payload: pld,
 	}
@@ -51,6 +53,7 @@ func encodeDatagram(dg datagram) string {
 	data = binary.BigEndian.AppendUint16(data, uint16(dg.version))
 	data = binary.BigEndian.AppendUint64(data, uint64(dg.device))
 	data = binary.BigEndian.AppendUint32(data, uint32(dg.session))
+	data = binary.BigEndian.AppendUint32(data, uint32(dg.number))
 	data = binary.BigEndian.AppendUint16(data, uint16(dg.command))
 	data = append(data, dg.payload...)
 
@@ -66,20 +69,22 @@ func decodeDatagram(s string) (datagram, error) {
 		return datagram{}, err
 	}
 
-	if len(data) < 16 {
+	if len(data) < 20 {
 		return datagram{}, errors.New("malformed datagram")
 	}
 
 	ver := int16(binary.BigEndian.Uint16(data[0:2]))
 	dev := int64(binary.BigEndian.Uint64(data[2:10]))
 	ses := int32(binary.BigEndian.Uint32(data[10:14]))
-	cmd := int16(binary.BigEndian.Uint16(data[14:16]))
-	pld := data[16:]
+	num := int32(binary.BigEndian.Uint32(data[14:18]))
+	cmd := int16(binary.BigEndian.Uint16(data[18:20]))
+	pld := data[20:]
 
 	dg := datagram{
 		version: ver,
 		device:  dev,
 		session: ses,
+		number:  num,
 		command: cmd,
 		payload: pld,
 	}
