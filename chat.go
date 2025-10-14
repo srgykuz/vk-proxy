@@ -86,11 +86,17 @@ func handleMessage(cfg config, msg message) error {
 		err = handleCommandConnect(cfg, lk, dg)
 	case commandForward:
 		err = handleCommandForward(cfg, lk, dg)
+	case commandClose:
+		handleCommandClose(lk, false)
 	default:
 		return fmt.Errorf("unknown command: %v", dg.command)
 	}
 
 	if err != nil {
+		if dg.command != commandClose {
+			handleCommandClose(lk, true)
+		}
+
 		return fmt.Errorf("command %v: %v", dg.command, err)
 	}
 
@@ -139,4 +145,19 @@ func handleCommandForward(cfg config, lk link, dg datagram) error {
 	err := writeSocks(cfg, lk.peer, dg.payload)
 
 	return err
+}
+
+func handleCommandClose(lk link, notify bool) {
+	if lk.brg != nil {
+		if notify {
+			dg := newDatagram(lk.brg.id, commandClose, nil)
+			lk.brg.send(dg)
+		}
+
+		lk.brg.close()
+	}
+
+	if lk.peer != nil {
+		lk.peer.Close()
+	}
 }

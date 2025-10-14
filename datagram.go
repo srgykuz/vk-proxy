@@ -10,6 +10,7 @@ import (
 const (
 	commandConnect int16 = iota + 1
 	commandForward
+	commandClose
 )
 
 var deviceID = time.Now().UnixMilli()
