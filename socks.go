@@ -328,7 +328,7 @@ func handleSocksStageConnectSession(ses *session, addr address) error {
 	pldb := pld.encode()
 	dg := newDatagram(ses.id, num, commandConnect, pldb)
 
-	if err := ses.send(dg); err != nil {
+	if err := ses.message(dg); err != nil {
 		return err
 	}
 
@@ -346,7 +346,7 @@ func handleSocksStageForward(ses *session, in []byte, chunkSize int) error {
 		num := ses.nextNumber()
 		dg := newDatagram(ses.id, num, commandForward, chunk)
 
-		if err := ses.send(dg); err != nil {
+		if err := ses.message(dg); err != nil {
 			return err
 		}
 	}

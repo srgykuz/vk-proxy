@@ -126,7 +126,7 @@ func handleCommandConnect(cfg config, ses *session, dg datagram) error {
 }
 
 func handleCommandForward(cfg config, ses *session, dg datagram) error {
-	if err := ses.wait(signalConnected); err != nil {
+	if err := ses.waitSignal(signalConnected); err != nil {
 		return err
 	}
 
@@ -139,7 +139,7 @@ func handleCommandClose(ses *session, notify bool) {
 	if notify {
 		num := ses.nextNumber()
 		dg := newDatagram(ses.id, num, commandClose, nil)
-		ses.send(dg)
+		ses.message(dg)
 	}
 
 	ses.close()

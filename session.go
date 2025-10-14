@@ -54,7 +54,7 @@ type session struct {
 	number    int32
 	peer      net.Conn
 	closed    bool
-	datagrams chan datagram
+	messages  chan string
 	sigConn   chan struct{}
 	sigConnCl bool
 }
@@ -69,7 +69,7 @@ func openSession(id int32, cfg config) (*session, error) {
 		number:    0,
 		peer:      nil,
 		closed:    false,
-		datagrams: make(chan datagram, 100),
+		messages:  make(chan string, 100),
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
 	}
@@ -77,7 +77,7 @@ func openSession(id int32, cfg config) (*session, error) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.listen(cfg)
+		s.handleMessages(cfg)
 	}()
 
 	return s, nil
@@ -103,29 +103,15 @@ func (s *session) close() {
 		s.sigConnCl = true
 	}
 
-	close(s.datagrams)
+	close(s.messages)
+
 	s.wg.Wait()
 
 	s.closed = true
 }
 
-func (s *session) listen(cfg config) {
-	for dg := range s.datagrams {
-		str := encodeDatagram(dg)
-		p := messagesSendParams{
-			message: str,
-		}
-
-		slog.Debug("session: send", "id", s.id, "dg", dg)
-
-		if _, err := messagesSend(cfg, p); err != nil {
-			slog.Error("session: send", "id", s.id, "dg", dg, "err", err)
-		}
-	}
-}
-
-func (s *session) send(dg datagram) error {
-	clone := dg.clone()
+func (s *session) message(dg datagram) error {
+	msg := encodeDatagram(dg)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -134,11 +120,25 @@ func (s *session) send(dg datagram) error {
 		return errSessionClosed
 	}
 
+	slog.Debug("session: message", "id", s.id, "dg", dg)
+
 	select {
-	case s.datagrams <- clone:
+	case s.messages <- msg:
 		return nil
 	default:
-		return errors.New("send: queue is full")
+		return errors.New("message: queue is full")
+	}
+}
+
+func (s *session) handleMessages(cfg config) {
+	for msg := range s.messages {
+		p := messagesSendParams{
+			message: msg,
+		}
+
+		if _, err := messagesSend(cfg, p); err != nil {
+			slog.Error("session: handle messages", "id", s.id, "err", err)
+		}
 	}
 }
 
@@ -167,7 +167,7 @@ func (s *session) signal(sig int) error {
 	return nil
 }
 
-func (s *session) wait(sig int) error {
+func (s *session) waitSignal(sig int) error {
 	s.mu.Lock()
 
 	if s.closed {
@@ -181,7 +181,7 @@ func (s *session) wait(sig int) error {
 	case signalConnected:
 		<-s.sigConn
 	default:
-		return fmt.Errorf("wait: unknown signal: %v", sig)
+		return fmt.Errorf("wait signal: unknown signal: %v", sig)
 	}
 
 	return nil
