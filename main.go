@@ -68,16 +68,21 @@ type configLog struct {
 }
 
 type configSocks struct {
-	ListenHost           string `json:"listenHost"`
-	ListenPort           uint16 `json:"listenPort"`
-	ConnectionDeadlineMS int    `json:"connectionDeadline"`
-	ForwardIntervalMS    int    `json:"forwardInterval"`
-	ReadSize             int    `json:"readSize"`
-	ChunkSize            int    `json:"chunkSize"`
+	ListenHost        string `json:"listenHost"`
+	ListenPort        uint16 `json:"listenPort"`
+	ReadSize          int    `json:"readSize"`
+	ReadTimeoutMS     int    `json:"readTimeout"`
+	WriteTimeoutMS    int    `json:"writeTimeout"`
+	ForwardSize       int    `json:"forwardSize"`
+	ForwardIntervalMS int    `json:"forwardInterval"`
 }
 
-func (cfg configSocks) ConnectionDeadline() time.Duration {
-	return time.Duration(cfg.ConnectionDeadlineMS) * time.Millisecond
+func (cfg configSocks) ReadTimeout() time.Duration {
+	return time.Duration(cfg.ReadTimeoutMS) * time.Millisecond
+}
+
+func (cfg configSocks) WriteTimeout() time.Duration {
+	return time.Duration(cfg.WriteTimeoutMS) * time.Millisecond
 }
 
 func (cfg configSocks) ForwardInterval() time.Duration {
@@ -112,12 +117,13 @@ func defaultConfig() config {
 			Level: 0,
 		},
 		Socks: configSocks{
-			ListenHost:           "127.0.0.1",
-			ListenPort:           1080,
-			ConnectionDeadlineMS: 15000,
-			ForwardIntervalMS:    300,
-			ReadSize:             4096,
-			ChunkSize:            3000,
+			ListenHost:        "127.0.0.1",
+			ListenPort:        1080,
+			ReadSize:          4096,
+			ReadTimeoutMS:     10000,
+			WriteTimeoutMS:    10000,
+			ForwardSize:       3000,
+			ForwardIntervalMS: 300,
 		},
 		API: configAPI{
 			Origin:    "https://api.vk.ru",

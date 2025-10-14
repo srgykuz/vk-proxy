@@ -112,7 +112,7 @@ func readSocks(cfg config, ses *session, stage int, buf readBuffer) error {
 	temp := make([]byte, cfg.Socks.ReadSize)
 
 	for {
-		deadline := time.Now().Add(cfg.Socks.ConnectionDeadline())
+		deadline := time.Now().Add(cfg.Socks.ReadTimeout())
 
 		if err := ses.peer.SetReadDeadline(deadline); err != nil {
 			return err
@@ -206,7 +206,7 @@ func forwardsSocks(cfg config, ses *session, buf readBuffer) {
 		if len(in) > 0 {
 			slog.Debug("socks: forward", "ses", ses.id, "len", len(in))
 
-			err := handleSocksStageForward(ses, in, cfg.Socks.ChunkSize)
+			err := handleSocksStageForward(ses, in, cfg.Socks.ForwardSize)
 
 			if err != nil {
 				buf.mu.Lock()
@@ -230,7 +230,7 @@ func writeSocks(cfg config, ses *session, out []byte) error {
 		slog.Debug("socks: payload", "peer", peer, "out", bytesToHex(out))
 	}
 
-	deadline := time.Now().Add(cfg.Socks.ConnectionDeadline())
+	deadline := time.Now().Add(cfg.Socks.WriteTimeout())
 
 	if err := ses.peer.SetWriteDeadline(deadline); err != nil {
 		return err
