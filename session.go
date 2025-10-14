@@ -54,6 +54,7 @@ type session struct {
 	number    int32
 	peer      net.Conn
 	closed    bool
+	writes    chan []byte
 	messages  chan string
 	sigConn   chan struct{}
 	sigConnCl bool
@@ -69,10 +70,17 @@ func openSession(id int32, cfg config) (*session, error) {
 		number:    0,
 		peer:      nil,
 		closed:    false,
+		writes:    make(chan []byte, 100),
 		messages:  make(chan string, 100),
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
 	}
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.handleWrites(cfg)
+	}()
 
 	s.wg.Add(1)
 	go func() {
@@ -103,11 +111,43 @@ func (s *session) close() {
 		s.sigConnCl = true
 	}
 
+	close(s.writes)
 	close(s.messages)
 
 	s.wg.Wait()
 
 	s.closed = true
+}
+
+func (s *session) write(b []byte) error {
+	clone := make([]byte, len(b))
+	copy(clone, b)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return errSessionClosed
+	}
+
+	if s.peer == nil {
+		return errors.New("write: peer is nil")
+	}
+
+	select {
+	case s.writes <- clone:
+		return nil
+	default:
+		return errors.New("write: queue is full")
+	}
+}
+
+func (s *session) handleWrites(cfg config) {
+	for b := range s.writes {
+		if err := writeSocks(cfg, s, b); err != nil {
+			slog.Error("session: handle writes", "id", s.id, "err", err)
+		}
+	}
 }
 
 func (s *session) message(dg datagram) error {

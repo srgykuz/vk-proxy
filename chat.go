@@ -82,7 +82,7 @@ func handleMessage(cfg config, msg message) error {
 	case commandConnect:
 		err = handleCommandConnect(cfg, ses, dg)
 	case commandForward:
-		err = handleCommandForward(cfg, ses, dg)
+		err = handleCommandForward(ses, dg)
 	case commandClose:
 		handleCommandClose(ses, false)
 	default:
@@ -125,12 +125,12 @@ func handleCommandConnect(cfg config, ses *session, dg datagram) error {
 	return nil
 }
 
-func handleCommandForward(cfg config, ses *session, dg datagram) error {
+func handleCommandForward(ses *session, dg datagram) error {
 	if err := ses.waitSignal(signalConnected); err != nil {
 		return err
 	}
 
-	err := writeSocks(cfg, ses, dg.payload)
+	err := ses.write(dg.payload)
 
 	return err
 }
