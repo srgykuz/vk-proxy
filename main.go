@@ -71,7 +71,7 @@ type configSocks struct {
 	ListenHost           string `json:"listenHost"`
 	ListenPort           uint16 `json:"listenPort"`
 	ConnectionDeadlineMS int    `json:"connectionDeadline"`
-	ForwardIntervalMS    int    `json:"forwardIntervalMS"`
+	ForwardIntervalMS    int    `json:"forwardInterval"`
 	ReadSize             int    `json:"readSize"`
 	ChunkSize            int    `json:"chunkSize"`
 }
