@@ -202,10 +202,3 @@ func (s *session) setPeer(conn net.Conn) {
 
 	s.peer = conn
 }
-
-func (s *session) getPeer() net.Conn {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.peer
-}
