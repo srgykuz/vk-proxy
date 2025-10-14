@@ -8,191 +8,204 @@ import (
 	"sync"
 )
 
-type link struct {
-	brg  *bridge
-	peer net.Conn
-}
-
-var links map[int32]link = map[int32]link{}
-var linksMu sync.Mutex
-
-func getLink(id int32) (link, bool) {
-	linksMu.Lock()
-	defer linksMu.Unlock()
-
-	l, exists := links[id]
-
-	return l, exists
-}
-
-func setLink(id int32, l link) {
-	linksMu.Lock()
-	defer linksMu.Unlock()
-
-	links[id] = l
-}
-
-var counter int32 = 0
-var counterMu sync.Mutex
-
-func nextID() int32 {
-	counterMu.Lock()
-	defer counterMu.Unlock()
-
-	counter++
-
-	return counter
-}
-
 const (
-	bridgeSignalConnected int = iota
+	signalConnected int = iota + 1
 )
 
 var (
-	errBridgeClosed = errors.New("bridge is closed")
+	errSessionClosed = errors.New("session is closed")
 )
 
-type bridge struct {
+var sessions map[int32]*session = map[int32]*session{}
+var sessionsMu sync.Mutex
+
+func getSession(id int32) (*session, bool) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+
+	ses, exists := sessions[id]
+
+	return ses, exists
+}
+
+func setSession(id int32, ses *session) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+
+	sessions[id] = ses
+}
+
+var sessionID int32 = 0
+var sessionIDMu sync.Mutex
+
+func nextSessionID() int32 {
+	sessionIDMu.Lock()
+	defer sessionIDMu.Unlock()
+
+	sessionID++
+
+	return sessionID
+}
+
+type session struct {
 	id        int32
 	mu        sync.Mutex
 	wg        sync.WaitGroup
+	number    int32
+	peer      net.Conn
 	closed    bool
 	datagrams chan datagram
 	sigConn   chan struct{}
 	sigConnCl bool
-	number    int32
 }
 
-func openBridge(cfg config, id int32) (*bridge, error) {
-	if id == 0 {
-		id = nextID()
-	}
+func openSession(id int32, cfg config) (*session, error) {
+	slog.Debug("session: open", "id", id)
 
-	b := &bridge{
+	s := &session{
 		id:        id,
 		mu:        sync.Mutex{},
 		wg:        sync.WaitGroup{},
+		number:    0,
+		peer:      nil,
 		closed:    false,
-		datagrams: make(chan datagram, 50),
+		datagrams: make(chan datagram, 100),
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
-		number:    0,
 	}
 
-	b.wg.Add(1)
+	s.wg.Add(1)
 	go func() {
-		defer b.wg.Done()
-		b.listen(cfg)
+		defer s.wg.Done()
+		s.listen(cfg)
 	}()
 
-	slog.Debug("bridge: opened", "id", b.id)
-
-	return b, nil
+	return s, nil
 }
 
-func (b *bridge) close() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (s *session) close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if b.closed {
+	if s.closed {
 		return
 	}
 
-	b.closed = true
-
-	close(b.datagrams)
-
-	if !b.sigConnCl {
-		close(b.sigConn)
-		b.sigConnCl = true
+	if s.peer == nil {
+		slog.Debug("session: close", "id", s.id)
+	} else {
+		slog.Debug("session: close", "id", s.id, "peer", s.peer.RemoteAddr().String())
+		s.peer.Close()
 	}
 
-	b.wg.Wait()
+	if !s.sigConnCl {
+		close(s.sigConn)
+		s.sigConnCl = true
+	}
 
-	slog.Debug("bridge: closed", "id", b.id)
+	close(s.datagrams)
+	s.wg.Wait()
+
+	s.closed = true
 }
 
-func (b *bridge) listen(cfg config) {
-	for dg := range b.datagrams {
-		s := encodeDatagram(dg)
+func (s *session) listen(cfg config) {
+	for dg := range s.datagrams {
+		str := encodeDatagram(dg)
 		p := messagesSendParams{
-			message: s,
+			message: str,
 		}
 
-		slog.Debug("bridge: sending", "dg", dg)
+		slog.Debug("session: send", "id", s.id, "dg", dg)
 
 		if _, err := messagesSend(cfg, p); err != nil {
-			slog.Error("bridge: sending failed", "err", err, "dg", dg)
+			slog.Error("session: send", "id", s.id, "dg", dg, "err", err)
 		}
 	}
 }
 
-func (b *bridge) send(dg datagram) error {
+func (s *session) send(dg datagram) error {
 	clone := dg.clone()
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if b.closed {
-		return errBridgeClosed
+	if s.closed {
+		return errSessionClosed
 	}
 
 	select {
-	case b.datagrams <- clone:
+	case s.datagrams <- clone:
 		return nil
 	default:
-		return errors.New("queue is full")
+		return errors.New("send: queue is full")
 	}
 }
 
-func (b *bridge) signal(sig int) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (s *session) signal(sig int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if b.closed {
-		return errBridgeClosed
+	if s.closed {
+		return errSessionClosed
 	}
 
+	slog.Debug("session: signal", "id", s.id, "sig", sig)
+
 	switch sig {
-	case bridgeSignalConnected:
-		if b.sigConnCl {
-			return errors.New("bridgeSignalConnected can be called only once")
+	case signalConnected:
+		if s.sigConnCl {
+			return errors.New("signalConnected already done")
 		} else {
-			close(b.sigConn)
-			b.sigConnCl = true
+			close(s.sigConn)
+			s.sigConnCl = true
 		}
 	default:
-		return fmt.Errorf("unknown signal - %v", sig)
+		return fmt.Errorf("signal: unknown signal: %v", sig)
 	}
 
 	return nil
 }
 
-func (b *bridge) wait(sig int) error {
-	b.mu.Lock()
+func (s *session) wait(sig int) error {
+	s.mu.Lock()
 
-	if b.closed {
-		b.mu.Unlock()
-		return errBridgeClosed
+	if s.closed {
+		s.mu.Unlock()
+		return errSessionClosed
 	}
 
-	b.mu.Unlock()
+	s.mu.Unlock()
 
 	switch sig {
-	case bridgeSignalConnected:
-		<-b.sigConn
+	case signalConnected:
+		<-s.sigConn
 	default:
-		return fmt.Errorf("unknown signal - %v", sig)
+		return fmt.Errorf("wait: unknown signal: %v", sig)
 	}
 
 	return nil
 }
 
-func (b *bridge) nextNumber() int32 {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (s *session) nextNumber() int32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	b.number++
+	s.number++
 
-	return b.number
+	return s.number
+}
+
+func (s *session) setPeer(conn net.Conn) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.peer = conn
+}
+
+func (s *session) getPeer() net.Conn {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.peer
 }

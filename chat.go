@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -57,44 +56,41 @@ func handleMessage(cfg config, msg message) error {
 		return nil
 	}
 
-	slog.Debug("chat: handle", "msg", msg.ID, "dg", dg)
+	var ses *session
+	var exists bool
+
+	ses, exists = getSession(dg.session)
+
+	if !exists {
+		ses, err = openSession(dg.session, cfg)
+
+		if err != nil {
+			return fmt.Errorf("open session: %v", err)
+		}
+
+		setSession(ses.id, ses)
+	}
+
+	slog.Debug("chat: read", "msg", msg.ID, "ses", ses.id, "dg", dg)
 
 	if cfg.Log.Payload {
 		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text, "payload", bytesToHex(dg.payload))
 	}
 
-	var lk link
-	var exists bool
-
-	lk, exists = getLink(dg.session)
-
-	if !exists {
-		brg, err := openBridge(cfg, dg.session)
-
-		if err != nil {
-			return fmt.Errorf("open bridge: %v", err)
-		}
-
-		lk = link{
-			brg: brg,
-		}
-		setLink(brg.id, lk)
-	}
-
 	switch dg.command {
 	case commandConnect:
-		err = handleCommandConnect(cfg, lk, dg)
+		err = handleCommandConnect(cfg, ses, dg)
 	case commandForward:
-		err = handleCommandForward(cfg, lk, dg)
+		err = handleCommandForward(cfg, ses, dg)
 	case commandClose:
-		handleCommandClose(lk, false)
+		handleCommandClose(ses, false)
 	default:
 		return fmt.Errorf("unknown command: %v", dg.command)
 	}
 
 	if err != nil {
 		if dg.command != commandClose {
-			handleCommandClose(lk, true)
+			handleCommandClose(ses, true)
 		}
 
 		return fmt.Errorf("command %v: %v", dg.command, err)
@@ -103,11 +99,7 @@ func handleMessage(cfg config, msg message) error {
 	return nil
 }
 
-func handleCommandConnect(cfg config, lk link, dg datagram) error {
-	if lk.brg == nil {
-		return errors.New("link is misconfigured")
-	}
-
+func handleCommandConnect(cfg config, ses *session, dg datagram) error {
 	pld := payloadConnect{}
 
 	if err := pld.decode(dg.payload); err != nil {
@@ -121,44 +113,33 @@ func handleCommandConnect(cfg config, lk link, dg datagram) error {
 		return err
 	}
 
-	lk.peer = conn
-	setLink(lk.brg.id, lk)
+	ses.setPeer(conn)
 
-	go acceptSocks(cfg, lk.peer, lk.brg, stageForward)
+	go acceptSocks(cfg, ses, stageForward)
 
-	if err := lk.brg.signal(bridgeSignalConnected); err != nil {
+	if err := ses.signal(signalConnected); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func handleCommandForward(cfg config, lk link, dg datagram) error {
-	if lk.brg == nil || lk.peer == nil {
-		return errors.New("link is misconfigured")
-	}
-
-	if err := lk.brg.wait(bridgeSignalConnected); err != nil {
+func handleCommandForward(cfg config, ses *session, dg datagram) error {
+	if err := ses.wait(signalConnected); err != nil {
 		return err
 	}
 
-	err := writeSocks(cfg, lk.peer, dg.payload)
+	err := writeSocks(cfg, ses, dg.payload)
 
 	return err
 }
 
-func handleCommandClose(lk link, notify bool) {
-	if lk.brg != nil {
-		if notify {
-			num := lk.brg.nextNumber()
-			dg := newDatagram(lk.brg.id, num, commandClose, nil)
-			lk.brg.send(dg)
-		}
-
-		lk.brg.close()
+func handleCommandClose(ses *session, notify bool) {
+	if notify {
+		num := ses.nextNumber()
+		dg := newDatagram(ses.id, num, commandClose, nil)
+		ses.send(dg)
 	}
 
-	if lk.peer != nil {
-		lk.peer.Close()
-	}
+	ses.close()
 }

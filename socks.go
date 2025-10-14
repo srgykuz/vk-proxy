@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	stageHandshake int = iota
+	stageHandshake int = iota + 1
 	stageConnect
 	stageForward
 )
@@ -44,37 +44,31 @@ func listenSocks(cfg config) error {
 			continue
 		}
 
-		brg, err := openBridge(cfg, 0)
+		ses, err := openSession(nextSessionID(), cfg)
 
 		if err != nil {
-			slog.Error("socks: bridge", "err", err)
+			slog.Error("socks: session", "err", err)
 			conn.Close()
 			continue
 		}
 
-		lk := link{
-			brg:  brg,
-			peer: conn,
-		}
-		setLink(brg.id, lk)
+		ses.setPeer(conn)
+		setSession(ses.id, ses)
 
-		go acceptSocks(cfg, conn, brg, stageHandshake)
+		go acceptSocks(cfg, ses, stageHandshake)
 	}
 }
 
-func acceptSocks(cfg config, conn net.Conn, brg *bridge, stage int) {
-	defer brg.close()
-	defer conn.Close()
+func acceptSocks(cfg config, ses *session, stage int) {
+	peer := ses.peer.RemoteAddr().String()
 
-	remote := conn.RemoteAddr().String()
-	slog.Debug("socks: accepted", "remote", remote, "bridge", brg.id)
+	defer slog.Debug("socks: closed", "peer", peer, "ses", ses.id)
+	defer ses.close()
 
-	err := handleSocks(cfg, conn, brg, stage)
+	slog.Debug("socks: accept", "peer", peer, "ses", ses.id)
 
-	if err == nil {
-		slog.Debug("socks: closed", "remote", remote, "bridge", brg.id)
-	} else {
-		slog.Error("socks: closed", "remote", remote, "bridge", brg.id, "err", err)
+	if err := handleSocks(cfg, ses, stage); err != nil {
+		slog.Error("socks: handle", "peer", peer, "ses", ses.id, "err", err)
 	}
 }
 
@@ -85,7 +79,7 @@ type readBuffer struct {
 	errs []error
 }
 
-func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
+func handleSocks(cfg config, ses *session, stage int) error {
 	var wg sync.WaitGroup
 	var err error
 	buf := readBuffer{
@@ -99,13 +93,13 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 	go func() {
 		defer wg.Done()
 		defer close(buf.done)
-		err = readSocks(cfg, conn, buf, stage, brg)
+		err = readSocks(cfg, ses, stage, buf)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		forwardsSocks(cfg, buf, brg)
+		forwardsSocks(cfg, ses, buf)
 	}()
 
 	wg.Wait()
@@ -113,26 +107,26 @@ func handleSocks(cfg config, conn net.Conn, brg *bridge, stage int) error {
 	return err
 }
 
-func readSocks(cfg config, conn net.Conn, buf readBuffer, stage int, brg *bridge) error {
-	remote := conn.RemoteAddr().String()
+func readSocks(cfg config, ses *session, stage int, buf readBuffer) error {
+	peer := ses.peer.RemoteAddr().String()
 	temp := make([]byte, cfg.Socks.ReadSize)
 
 	for {
 		deadline := time.Now().Add(cfg.Socks.ConnectionDeadline())
 
-		if err := conn.SetReadDeadline(deadline); err != nil {
+		if err := ses.peer.SetReadDeadline(deadline); err != nil {
 			return err
 		}
 
-		readN, readErr := conn.Read(temp)
+		readN, readErr := ses.peer.Read(temp)
 
 		if readN > 0 {
 			in := temp[:readN]
 
-			slog.Debug("socks: read", "remote", remote, "len", len(in))
+			slog.Debug("socks: read", "peer", peer, "len", len(in))
 
 			if cfg.Log.Payload {
-				slog.Debug("socks: payload", "remote", remote, "in", bytesToHex(in))
+				slog.Debug("socks: payload", "peer", peer, "in", bytesToHex(in))
 			}
 
 			var out []byte
@@ -147,7 +141,7 @@ func readSocks(cfg config, conn net.Conn, buf readBuffer, stage int, brg *bridge
 				addr, out, err = handleSocksStageConnect(in)
 
 				if err == nil {
-					err = handleSocksStageConnectBridge(brg, addr)
+					err = handleSocksStageConnectSession(ses, addr)
 				}
 
 				stage = stageForward
@@ -162,11 +156,11 @@ func readSocks(cfg config, conn net.Conn, buf readBuffer, stage int, brg *bridge
 
 				buf.mu.Unlock()
 			default:
-				err = fmt.Errorf("unknown stage: %v", stage)
+				err = fmt.Errorf("read: unknown stage: %v", stage)
 			}
 
 			if len(out) > 0 {
-				if writeErr := writeSocks(cfg, conn, out); writeErr != nil && err == nil {
+				if writeErr := writeSocks(cfg, ses, out); writeErr != nil && err == nil {
 					err = writeErr
 				}
 			}
@@ -186,7 +180,7 @@ func readSocks(cfg config, conn net.Conn, buf readBuffer, stage int, brg *bridge
 	}
 }
 
-func forwardsSocks(cfg config, buf readBuffer, brg *bridge) {
+func forwardsSocks(cfg config, ses *session, buf readBuffer) {
 	interval := cfg.Socks.ForwardInterval()
 
 	for {
@@ -210,9 +204,9 @@ func forwardsSocks(cfg config, buf readBuffer, brg *bridge) {
 		buf.mu.Unlock()
 
 		if len(in) > 0 {
-			slog.Debug("socks: forward", "bridge", brg.id, "len", len(in))
+			slog.Debug("socks: forward", "ses", ses.id, "len", len(in))
 
-			err := handleSocksStageForward(in, brg, cfg.Socks.ChunkSize)
+			err := handleSocksStageForward(ses, in, cfg.Socks.ChunkSize)
 
 			if err != nil {
 				buf.mu.Lock()
@@ -227,22 +221,22 @@ func forwardsSocks(cfg config, buf readBuffer, brg *bridge) {
 	}
 }
 
-func writeSocks(cfg config, conn net.Conn, out []byte) error {
-	remote := conn.RemoteAddr().String()
+func writeSocks(cfg config, ses *session, out []byte) error {
+	peer := ses.peer.RemoteAddr().String()
 
-	slog.Debug("socks: write", "remote", remote, "len", len(out))
+	slog.Debug("socks: write", "peer", peer, "len", len(out))
 
 	if cfg.Log.Payload {
-		slog.Debug("socks: payload", "remote", remote, "out", bytesToHex(out))
+		slog.Debug("socks: payload", "peer", peer, "out", bytesToHex(out))
 	}
 
 	deadline := time.Now().Add(cfg.Socks.ConnectionDeadline())
 
-	if err := conn.SetWriteDeadline(deadline); err != nil {
+	if err := ses.peer.SetWriteDeadline(deadline); err != nil {
 		return err
 	}
 
-	_, err := conn.Write(out)
+	_, err := ses.peer.Write(out)
 
 	return err
 }
@@ -328,31 +322,31 @@ func handleSocksStageConnect(in []byte) (address, []byte, error) {
 	return dst, out, nil
 }
 
-func handleSocksStageConnectBridge(brg *bridge, addr address) error {
-	num := brg.nextNumber()
+func handleSocksStageConnectSession(ses *session, addr address) error {
+	num := ses.nextNumber()
 	pld := payloadConnect(addr)
-	b := pld.encode()
-	dg := newDatagram(brg.id, num, commandConnect, b)
+	pldb := pld.encode()
+	dg := newDatagram(ses.id, num, commandConnect, pldb)
 
-	if err := brg.send(dg); err != nil {
+	if err := ses.send(dg); err != nil {
 		return err
 	}
 
-	if err := brg.signal(bridgeSignalConnected); err != nil {
+	if err := ses.signal(signalConnected); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func handleSocksStageForward(in []byte, brg *bridge, chunkSize int) error {
+func handleSocksStageForward(ses *session, in []byte, chunkSize int) error {
 	chunks := bytesToChunks(in, chunkSize)
 
 	for _, chunk := range chunks {
-		num := brg.nextNumber()
-		dg := newDatagram(brg.id, num, commandForward, chunk)
+		num := ses.nextNumber()
+		dg := newDatagram(ses.id, num, commandForward, chunk)
 
-		if err := brg.send(dg); err != nil {
+		if err := ses.send(dg); err != nil {
 			return err
 		}
 	}
