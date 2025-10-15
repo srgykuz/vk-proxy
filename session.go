@@ -122,6 +122,13 @@ func (s *session) close() {
 	s.closed = true
 }
 
+func (s *session) opened() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return !s.closed
+}
+
 func (s *session) write(b []byte) error {
 	clone := make([]byte, len(b))
 	copy(clone, b)

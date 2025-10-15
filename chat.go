@@ -62,6 +62,14 @@ func handleMessage(cfg config, msg message) error {
 
 	ses, exists = getSession(dg.session)
 
+	if exists && dg.command == commandConnect {
+		if ses.opened() {
+			return fmt.Errorf("bidirectional proxying over opened session: %v", dg)
+		}
+
+		exists = false
+	}
+
 	if !exists {
 		ses, err = openSession(dg.session, cfg)
 
