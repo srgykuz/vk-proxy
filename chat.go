@@ -57,10 +57,7 @@ func handleMessage(cfg config, msg message) error {
 		return nil
 	}
 
-	var ses *session
-	var exists bool
-
-	ses, exists = getSession(dg.session)
+	ses, exists := getSession(dg.session)
 
 	if exists && dg.command == commandConnect {
 		if ses.opened() {

@@ -69,8 +69,8 @@ type config struct {
 	Log     configLog     `json:"log"`
 	Session configSession `json:"session"`
 	Socks   configSocks   `json:"socks"`
-	API     configAPI     `json:"api"`
 	Chat    configChat    `json:"chat"`
+	API     configAPI     `json:"api"`
 }
 
 type configLog struct {
@@ -108,6 +108,16 @@ func (cfg configSocks) ForwardInterval() time.Duration {
 	return time.Duration(cfg.ForwardIntervalMS) * time.Millisecond
 }
 
+type configChat struct {
+	CheckIntervalMS int `json:"checkInterval"`
+	FetchCount      int `json:"fetchCount"`
+	FetchOffset     int `json:"fetchOffset"`
+}
+
+func (cfg configChat) CheckInterval() time.Duration {
+	return time.Duration(cfg.CheckIntervalMS) * time.Millisecond
+}
+
 type configAPI struct {
 	Origin          string `json:"origin"`
 	Version         string `json:"version"`
@@ -120,41 +130,31 @@ func (cfg configAPI) Timeout() time.Duration {
 	return time.Duration(cfg.TimeoutMS) * time.Millisecond
 }
 
-type configChat struct {
-	CheckIntervalMS int `json:"checkInterval"`
-	FetchCount      int `json:"fetchCount"`
-	FetchOffset     int `json:"fetchOffset"`
-}
-
-func (cfg configChat) CheckInterval() time.Duration {
-	return time.Duration(cfg.CheckIntervalMS) * time.Millisecond
-}
-
 func defaultConfig() config {
 	return config{
 		Log: configLog{
 			Level: 0,
 		},
 		Session: configSession{
-			ClearIntervalMS: 900000,
+			ClearIntervalMS: 900 * 1000,
 		},
 		Socks: configSocks{
 			ListenHost:        "127.0.0.1",
 			ListenPort:        1080,
 			ReadSize:          4096,
-			ReadTimeoutMS:     10000,
-			WriteTimeoutMS:    10000,
+			ReadTimeoutMS:     10 * 1000,
+			WriteTimeoutMS:    10 * 1000,
 			ForwardSize:       3000,
 			ForwardIntervalMS: 300,
-		},
-		API: configAPI{
-			Origin:    "https://api.vk.ru",
-			Version:   "5.199",
-			TimeoutMS: 7000,
 		},
 		Chat: configChat{
 			CheckIntervalMS: 1000,
 			FetchCount:      10,
+		},
+		API: configAPI{
+			Origin:    "https://api.vk.ru",
+			Version:   "5.199",
+			TimeoutMS: 7 * 1000,
 		},
 	}
 }
