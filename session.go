@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 )
 
 const (
@@ -33,6 +34,26 @@ func setSession(id int32, ses *session) {
 	defer sessionsMu.Unlock()
 
 	sessions[id] = ses
+}
+
+func clearSessions(cfg config) error {
+	interval := cfg.Session.ClearInterval()
+
+	for {
+		time.Sleep(interval)
+
+		sessionsMu.Lock()
+
+		for id, ses := range sessions {
+			if ses.opened() {
+				continue
+			}
+
+			delete(sessions, id)
+		}
+
+		sessionsMu.Unlock()
+	}
 }
 
 var sessionID int32 = 0

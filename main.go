@@ -52,19 +52,38 @@ func main() {
 		}
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		if err := clearSessions(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, "clear sessions:", err)
+			os.Exit(1)
+		}
+	}()
+
 	wg.Wait()
 }
 
 type config struct {
-	Log   configLog   `json:"log"`
-	Socks configSocks `json:"socks"`
-	API   configAPI   `json:"api"`
-	Chat  configChat  `json:"chat"`
+	Log     configLog     `json:"log"`
+	Session configSession `json:"session"`
+	Socks   configSocks   `json:"socks"`
+	API     configAPI     `json:"api"`
+	Chat    configChat    `json:"chat"`
 }
 
 type configLog struct {
 	Level   int  `json:"level"`
 	Payload bool `json:"payload"`
+}
+
+type configSession struct {
+	ClearIntervalMS int `json:"clearInterval"`
+}
+
+func (cfg configSession) ClearInterval() time.Duration {
+	return time.Duration(cfg.ClearIntervalMS) * time.Millisecond
 }
 
 type configSocks struct {
@@ -115,6 +134,9 @@ func defaultConfig() config {
 	return config{
 		Log: configLog{
 			Level: 0,
+		},
+		Session: configSession{
+			ClearIntervalMS: 900000,
 		},
 		Socks: configSocks{
 			ListenHost:        "127.0.0.1",
