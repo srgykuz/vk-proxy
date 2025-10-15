@@ -62,7 +62,7 @@ func listenSocks(cfg config) error {
 func acceptSocks(cfg config, ses *session, stage int) {
 	peer := ses.peer.RemoteAddr().String()
 
-	defer slog.Debug("socks: closed", "peer", peer, "ses", ses.id)
+	defer slog.Info("socks: closed", "peer", peer, "ses", ses.id)
 	defer ses.close()
 
 	slog.Debug("socks: accept", "peer", peer, "ses", ses.id)
@@ -142,6 +142,10 @@ func readSocks(cfg config, ses *session, stage int, buf readBuffer) error {
 
 				if err == nil {
 					err = handleSocksStageConnectSession(ses, addr)
+				}
+
+				if err == nil {
+					slog.Info("socks: forwarding", "peer", peer, "ses", ses.id, "addr", addr)
 				}
 
 				stage = stageForward

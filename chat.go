@@ -86,6 +86,10 @@ func handleMessage(cfg config, msg message) error {
 	switch dg.command {
 	case commandConnect:
 		err = handleCommandConnect(cfg, ses, dg)
+
+		if err == nil {
+			slog.Info("chat: forwarding", "ses", ses.id)
+		}
 	case commandForward:
 		err = handleCommandForward(ses, dg)
 	case commandClose:
