@@ -123,6 +123,7 @@ type configAPI struct {
 	Version         string `json:"version"`
 	TimeoutMS       int    `json:"timeout"`
 	UserID          string `json:"userID"`
+	ClubID          string `json:"clubID"`
 	ClubAccessToken string `json:"clubAccessToken"`
 }
 
@@ -182,6 +183,10 @@ func parseConfig(name string) (config, error) {
 func validateConfig(cfg config) error {
 	if cfg.API.UserID == "" {
 		return errors.New("api.userID is missing")
+	}
+
+	if cfg.API.ClubID == "" {
+		return errors.New("api.clubID is missing")
 	}
 
 	if cfg.API.ClubAccessToken == "" {
