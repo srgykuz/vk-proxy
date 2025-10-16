@@ -56,6 +56,16 @@ func main() {
 	go func() {
 		defer wg.Done()
 
+		if err := listenWall(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, "listen wall:", err)
+			os.Exit(1)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
 		if err := clearSessions(cfg); err != nil {
 			fmt.Fprintln(os.Stderr, "clear sessions:", err)
 			os.Exit(1)

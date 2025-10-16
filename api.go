@@ -177,3 +177,95 @@ func messagesGetLatest(cfg config) (message, error) {
 
 	return resp.Items[0], nil
 }
+
+type groupsGetLongPollServerResult struct {
+	Error    errorResult                     `json:"error"`
+	Response groupsGetLongPollServerResponse `json:"response"`
+}
+
+type groupsGetLongPollServerResponse struct {
+	Key    string      `json:"key"`
+	Server string      `json:"server"`
+	TS     json.Number `json:"ts"`
+}
+
+func groupsGetLongPollServer(cfg config) (groupsGetLongPollServerResponse, error) {
+	values := apiValues(cfg)
+
+	values.Set("group_id", cfg.API.ClubID)
+
+	uri := apiURL(cfg, "groups.getLongPollServer", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return groupsGetLongPollServerResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return groupsGetLongPollServerResponse{}, err
+	}
+
+	result := groupsGetLongPollServerResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return groupsGetLongPollServerResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return groupsGetLongPollServerResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
+type groupsUseLongPollServerResponse struct {
+	Failed  int         `json:"failed"`
+	TS      json.Number `json:"ts"`
+	Updates []update    `json:"updates"`
+}
+
+type update struct {
+	Type    string       `json:"type"`
+	EventID string       `json:"event_id"`
+	V       string       `json:"v"`
+	GroupID int          `json:"group_id"`
+	Object  updateObject `json:"object"`
+}
+
+type updateObject struct {
+	ID int `json:"id"`
+}
+
+func groupsUseLongPollServer(cfg config, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {
+	values := url.Values{}
+
+	values.Set("act", "a_check")
+	values.Set("key", server.Key)
+	values.Set("ts", last.TS.String())
+	values.Set("wait", "25")
+
+	cfg.API.TimeoutMS = 30 * 1000
+	uri := fmt.Sprintf("%v?%v", server.Server, values.Encode())
+
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return groupsUseLongPollServerResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return groupsUseLongPollServerResponse{}, err
+	}
+
+	result := groupsUseLongPollServerResponse{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return groupsUseLongPollServerResponse{}, err
+	}
+
+	return result, nil
+}
