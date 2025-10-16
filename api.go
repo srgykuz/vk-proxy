@@ -269,3 +269,95 @@ func groupsUseLongPollServer(cfg config, server groupsGetLongPollServerResponse,
 
 	return result, nil
 }
+
+type wallPostParams struct {
+	message string
+}
+
+type wallPostResult struct {
+	Error    errorResult      `json:"error"`
+	Response wallPostResponse `json:"response"`
+}
+
+type wallPostResponse struct {
+	PostID int `json:"post_id"`
+}
+
+func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
+	values := apiValues(cfg)
+
+	values.Set("owner_id", "-"+cfg.API.ClubID)
+	values.Set("message", params.message)
+
+	uri := apiURL(cfg, "wall.post", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return wallPostResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return wallPostResponse{}, err
+	}
+
+	result := wallPostResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return wallPostResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return wallPostResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
+type wallCreateCommentParams struct {
+	postID  int
+	message string
+}
+
+type wallCreateCommentResult struct {
+	Error    errorResult               `json:"error"`
+	Response wallCreateCommentResponse `json:"response"`
+}
+
+type wallCreateCommentResponse struct {
+	CommentID int `json:"comment_id"`
+}
+
+func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCommentResponse, error) {
+	values := apiValues(cfg)
+
+	values.Set("owner_id", "-"+cfg.API.ClubID)
+	values.Set("post_id", fmt.Sprint(params.postID))
+	values.Set("message", params.message)
+
+	uri := apiURL(cfg, "wall.createComment", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return wallCreateCommentResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return wallCreateCommentResponse{}, err
+	}
+
+	result := wallCreateCommentResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return wallCreateCommentResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return wallCreateCommentResponse{}, err
+	}
+
+	return result.Response, nil
+}
