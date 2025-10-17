@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,6 +23,23 @@ func apiValues(cfg config) url.Values {
 		"v":            []string{cfg.API.Version},
 		"access_token": []string{cfg.API.ClubAccessToken},
 	}
+}
+
+func apiForm(form map[string]string) (io.Reader, string, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	for k, v := range form {
+		if err := writer.WriteField(k, v); err != nil {
+			return nil, "", err
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, "", err
+	}
+
+	return body, writer.FormDataContentType(), nil
 }
 
 func apiDo(cfg config, req *http.Request) ([]byte, error) {
@@ -76,18 +95,26 @@ type messagesSendResult struct {
 }
 
 func messagesSend(cfg config, params messagesSendParams) (int, error) {
-	values := apiValues(cfg)
-
-	values.Set("user_id", cfg.API.UserID)
-	values.Set("random_id", "0")
-	values.Set("message", params.message)
-
-	uri := apiURL(cfg, "messages.send", values)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	form := map[string]string{
+		"user_id":   cfg.API.UserID,
+		"random_id": "0",
+		"message":   params.message,
+	}
+	body, ct, err := apiForm(form)
 
 	if err != nil {
 		return 0, err
 	}
+
+	values := apiValues(cfg)
+	uri := apiURL(cfg, "messages.send", values)
+	req, err := http.NewRequest(http.MethodPost, uri, body)
+
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Set("Content-Type", ct)
 
 	data, err := apiDo(cfg, req)
 
@@ -290,17 +317,25 @@ type wallPostResponse struct {
 }
 
 func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
-	values := apiValues(cfg)
-
-	values.Set("owner_id", "-"+cfg.API.ClubID)
-	values.Set("message", params.message)
-
-	uri := apiURL(cfg, "wall.post", values)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	form := map[string]string{
+		"owner_id": "-" + cfg.API.ClubID,
+		"message":  params.message,
+	}
+	body, ct, err := apiForm(form)
 
 	if err != nil {
 		return wallPostResponse{}, err
 	}
+
+	values := apiValues(cfg)
+	uri := apiURL(cfg, "wall.post", values)
+	req, err := http.NewRequest(http.MethodPost, uri, body)
+
+	if err != nil {
+		return wallPostResponse{}, err
+	}
+
+	req.Header.Set("Content-Type", ct)
 
 	data, err := apiDo(cfg, req)
 
@@ -336,18 +371,26 @@ type wallCreateCommentResponse struct {
 }
 
 func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCommentResponse, error) {
-	values := apiValues(cfg)
-
-	values.Set("owner_id", "-"+cfg.API.ClubID)
-	values.Set("post_id", fmt.Sprint(params.postID))
-	values.Set("message", params.message)
-
-	uri := apiURL(cfg, "wall.createComment", values)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	form := map[string]string{
+		"owner_id": "-" + cfg.API.ClubID,
+		"post_id":  fmt.Sprint(params.postID),
+		"message":  params.message,
+	}
+	body, ct, err := apiForm(form)
 
 	if err != nil {
 		return wallCreateCommentResponse{}, err
 	}
+
+	values := apiValues(cfg)
+	uri := apiURL(cfg, "wall.createComment", values)
+	req, err := http.NewRequest(http.MethodPost, uri, body)
+
+	if err != nil {
+		return wallCreateCommentResponse{}, err
+	}
+
+	req.Header.Set("Content-Type", ct)
 
 	data, err := apiDo(cfg, req)
 
