@@ -204,6 +204,8 @@ func (s *session) message(dg datagram) error {
 }
 
 func (s *session) handleMessages(cfg config) {
+	interval := cfg.API.Interval()
+
 	for msg := range s.messages {
 		s.mu.Lock()
 		postID := s.postID
@@ -234,6 +236,8 @@ func (s *session) handleMessages(cfg config) {
 		} else {
 			slog.Error("session: handle messages", "id", s.id, "err", err)
 		}
+
+		time.Sleep(interval)
 	}
 }
 

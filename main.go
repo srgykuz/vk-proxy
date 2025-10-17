@@ -132,6 +132,7 @@ type configAPI struct {
 	Origin          string `json:"origin"`
 	Version         string `json:"version"`
 	TimeoutMS       int    `json:"timeout"`
+	IntervalMS      int    `json:"interval"`
 	UserID          string `json:"userID"`
 	ClubID          string `json:"clubID"`
 	ClubAccessToken string `json:"clubAccessToken"`
@@ -139,6 +140,10 @@ type configAPI struct {
 
 func (cfg configAPI) Timeout() time.Duration {
 	return time.Duration(cfg.TimeoutMS) * time.Millisecond
+}
+
+func (cfg configAPI) Interval() time.Duration {
+	return time.Duration(cfg.IntervalMS) * time.Millisecond
 }
 
 func defaultConfig() config {
@@ -163,9 +168,10 @@ func defaultConfig() config {
 			FetchCount:      10,
 		},
 		API: configAPI{
-			Origin:    "https://api.vk.ru",
-			Version:   "5.199",
-			TimeoutMS: 7 * 1000,
+			Origin:     "https://api.vk.ru",
+			Version:    "5.199",
+			TimeoutMS:  7 * 1000,
+			IntervalMS: 55,
 		},
 	}
 }
