@@ -235,7 +235,9 @@ type update struct {
 }
 
 type updateObject struct {
-	ID int `json:"id"`
+	ID   int    `json:"id"`
+	Date int    `json:"date"`
+	Text string `json:"text"`
 }
 
 func groupsUseLongPollServer(cfg config, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {

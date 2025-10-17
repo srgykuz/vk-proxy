@@ -47,16 +47,40 @@ func listenChat(cfg config) error {
 }
 
 func handleMessage(cfg config, msg message) error {
-	dg, err := decodeDatagram(msg.Text)
+	dg, err := handleEncodedDatagram(msg.Text)
 
 	if err != nil {
-		return fmt.Errorf("decode datagram: %v", err)
+		return err
 	}
 
-	if dg.isLoopback() {
+	if dg.isZero() {
 		return nil
 	}
 
+	slog.Debug("chat: read", "id", msg.ID, "dg", dg)
+
+	if cfg.Log.Payload {
+		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text, "payload", bytesToHex(dg.payload))
+	}
+
+	return handleDatagram(cfg, dg)
+}
+
+func handleEncodedDatagram(encoded string) (datagram, error) {
+	dg, err := decodeDatagram(encoded)
+
+	if err != nil {
+		return datagram{}, fmt.Errorf("decode datagram: %v", err)
+	}
+
+	if dg.isLoopback() {
+		return datagram{}, nil
+	}
+
+	return dg, nil
+}
+
+func handleDatagram(cfg config, dg datagram) error {
 	ses, exists := getSession(dg.session)
 
 	if exists && dg.command == commandConnect {
@@ -66,6 +90,8 @@ func handleMessage(cfg config, msg message) error {
 
 		exists = false
 	}
+
+	var err error
 
 	if !exists {
 		ses, err = openSession(dg.session, cfg)
@@ -77,18 +103,14 @@ func handleMessage(cfg config, msg message) error {
 		setSession(ses.id, ses)
 	}
 
-	slog.Debug("chat: read", "msg", msg.ID, "ses", ses.id, "dg", dg)
-
-	if cfg.Log.Payload {
-		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text, "payload", bytesToHex(dg.payload))
-	}
+	slog.Debug("handler: handle", "ses", ses.id, "dg", dg)
 
 	switch dg.command {
 	case commandConnect:
 		err = handleCommandConnect(cfg, ses, dg)
 
 		if err == nil {
-			slog.Info("chat: forwarding", "ses", ses.id)
+			slog.Info("handler: forwarding", "ses", ses.id)
 		}
 	case commandForward:
 		err = handleCommandForward(ses, dg)

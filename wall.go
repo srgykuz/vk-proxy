@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 )
 
@@ -43,14 +42,29 @@ func listenWall(cfg config) error {
 		}
 
 		for _, upd := range last.Updates {
-			if err := handleUpdate(upd); err != nil {
-				slog.Error("wall: handle", "upd", upd.EventID, "err", err)
+			if err := handleUpdate(cfg, upd); err != nil {
+				slog.Error("wall: handle", "obj", upd.Object.ID, "err", err)
 			}
 		}
 	}
 }
 
-func handleUpdate(upd update) error {
-	fmt.Printf("%+v\n", upd)
-	return nil
+func handleUpdate(cfg config, upd update) error {
+	dg, err := handleEncodedDatagram(upd.Object.Text)
+
+	if err != nil {
+		return err
+	}
+
+	if dg.isZero() {
+		return nil
+	}
+
+	slog.Debug("wall: read", "id", upd.Object.ID, "dg", dg)
+
+	if cfg.Log.Payload {
+		slog.Debug("wall: update", "id", upd.Object.ID, "text", upd.Object.Text, "payload", bytesToHex(dg.payload))
+	}
+
+	return handleDatagram(cfg, dg)
 }

@@ -79,6 +79,7 @@ type session struct {
 	messages  chan string
 	sigConn   chan struct{}
 	sigConnCl bool
+	postID    int
 }
 
 func openSession(id int32, cfg config) (*session, error) {
@@ -95,6 +96,7 @@ func openSession(id int32, cfg config) (*session, error) {
 		messages:  make(chan string, 100),
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
+		postID:    0,
 	}
 
 	s.wg.Add(1)
@@ -203,11 +205,33 @@ func (s *session) message(dg datagram) error {
 
 func (s *session) handleMessages(cfg config) {
 	for msg := range s.messages {
-		p := messagesSendParams{
-			message: msg,
+		s.mu.Lock()
+		postID := s.postID
+		s.mu.Unlock()
+
+		var resp wallPostResponse
+		var err error
+
+		if postID > 0 {
+			p := wallCreateCommentParams{
+				message: msg,
+				postID:  postID,
+			}
+			_, err = wallCreateComment(cfg, p)
+		} else {
+			p := wallPostParams{
+				message: msg,
+			}
+			resp, err = wallPost(cfg, p)
 		}
 
-		if _, err := messagesSend(cfg, p); err != nil {
+		if err == nil {
+			if resp.PostID != 0 {
+				s.mu.Lock()
+				s.postID = resp.PostID
+				s.mu.Unlock()
+			}
+		} else {
 			slog.Error("session: handle messages", "id", s.id, "err", err)
 		}
 	}

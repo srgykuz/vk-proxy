@@ -38,6 +38,10 @@ func (dg datagram) isLoopback() bool {
 	return dg.device == deviceID
 }
 
+func (dg datagram) isZero() bool {
+	return dg.version == 0
+}
+
 func (dg datagram) clone() datagram {
 	pld := make([]byte, len(dg.payload))
 	copy(pld, dg.payload)
