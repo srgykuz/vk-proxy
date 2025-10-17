@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -25,12 +26,25 @@ func apiValues(cfg config) url.Values {
 	}
 }
 
-func apiForm(form map[string]string) (io.Reader, string, error) {
+func apiForm(fields map[string]string, files map[string]string) (io.Reader, string, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	for k, v := range form {
+	for k, v := range fields {
 		if err := writer.WriteField(k, v); err != nil {
+			return nil, "", err
+		}
+	}
+
+	for k, v := range files {
+		field := strings.Split(k, ".")[0]
+		fw, err := writer.CreateFormFile(field, k)
+
+		if err != nil {
+			return nil, "", err
+		}
+
+		if _, err := fw.Write([]byte(v)); err != nil {
 			return nil, "", err
 		}
 	}
@@ -100,7 +114,7 @@ func messagesSend(cfg config, params messagesSendParams) (int, error) {
 		"random_id": "0",
 		"message":   params.message,
 	}
-	body, ct, err := apiForm(form)
+	body, ct, err := apiForm(form, nil)
 
 	if err != nil {
 		return 0, err
@@ -321,7 +335,7 @@ func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
 		"owner_id": "-" + cfg.API.ClubID,
 		"message":  params.message,
 	}
-	body, ct, err := apiForm(form)
+	body, ct, err := apiForm(form, nil)
 
 	if err != nil {
 		return wallPostResponse{}, err
@@ -376,7 +390,7 @@ func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCo
 		"post_id":  fmt.Sprint(params.postID),
 		"message":  params.message,
 	}
-	body, ct, err := apiForm(form)
+	body, ct, err := apiForm(form, nil)
 
 	if err != nil {
 		return wallCreateCommentResponse{}, err
@@ -409,4 +423,167 @@ func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCo
 	}
 
 	return result.Response, nil
+}
+
+type docsGetWallUploadServerResult struct {
+	Error    errorResult                     `json:"error"`
+	Response docsGetWallUploadServerResponse `json:"response"`
+}
+
+type docsGetWallUploadServerResponse struct {
+	UploadURL string `json:"upload_url"`
+}
+
+func docsGetWallUploadServer(cfg config) (docsGetWallUploadServerResponse, error) {
+	values := apiValues(cfg)
+
+	values.Set("group_id", cfg.API.ClubID)
+
+	uri := apiURL(cfg, "docs.getWallUploadServer", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return docsGetWallUploadServerResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return docsGetWallUploadServerResponse{}, err
+	}
+
+	result := docsGetWallUploadServerResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return docsGetWallUploadServerResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return docsGetWallUploadServerResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
+type docsUploadParams struct {
+	uploadURL string
+	data      string
+}
+
+type docsUploadResult struct {
+	Error      string `json:"error"`
+	ErrorDescr string `json:"error_descr"`
+	docsUploadResponse
+}
+
+type docsUploadResponse struct {
+	File string `json:"file"`
+}
+
+func docsUpload(cfg config, params docsUploadParams) (docsUploadResponse, error) {
+	files := map[string]string{
+		"file.txt": params.data,
+	}
+	body, ct, err := apiForm(nil, files)
+
+	if err != nil {
+		return docsUploadResponse{}, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, params.uploadURL, body)
+
+	if err != nil {
+		return docsUploadResponse{}, err
+	}
+
+	req.Header.Set("Content-Type", ct)
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return docsUploadResponse{}, err
+	}
+
+	result := docsUploadResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return docsUploadResponse{}, err
+	}
+
+	if len(result.Error) > 0 {
+		return docsUploadResponse{}, errors.New(result.Error)
+	}
+
+	return result.docsUploadResponse, nil
+}
+
+type docsSaveParams struct {
+	file string
+}
+
+type docsSaveResult struct {
+	Error    errorResult      `json:"error"`
+	Response docsSaveResponse `json:"response"`
+}
+
+type docsSaveResponse struct {
+	Type string   `json:"type"`
+	Doc  document `json:"doc"`
+}
+
+type document struct {
+	ID   int    `json:"id"`
+	Size int    `json:"size"`
+	URL  string `json:"url"`
+}
+
+func docsSave(cfg config, params docsSaveParams) (docsSaveResponse, error) {
+	values := apiValues(cfg)
+
+	values.Set("file", params.file)
+
+	uri := apiURL(cfg, "docs.save", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return docsSaveResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return docsSaveResponse{}, err
+	}
+
+	result := docsSaveResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return docsSaveResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return docsSaveResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
+type docsDownloadParams struct {
+	url string
+}
+
+func docsDownload(cfg config, params docsDownloadParams) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, params.url, nil)
+
+	if err != nil {
+		return "", err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
 }
