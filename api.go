@@ -31,6 +31,10 @@ func apiDo(cfg config, req *http.Request) ([]byte, error) {
 	resp, err := http.DefaultClient.Do(req)
 
 	if err != nil {
+		if e, ok := err.(*url.Error); ok {
+			e.URL = req.URL.Path
+		}
+
 		return nil, err
 	}
 
