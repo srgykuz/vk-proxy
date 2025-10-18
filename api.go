@@ -280,9 +280,19 @@ type update struct {
 }
 
 type updateObject struct {
-	ID   int    `json:"id"`
-	Date int    `json:"date"`
-	Text string `json:"text"`
+	ID      int           `json:"id"`
+	Date    int           `json:"date"`
+	Text    string        `json:"text"`
+	Changes updateChanges `json:"changes"`
+}
+
+type updateChanges struct {
+	Website updateValueChangeString `json:"website"`
+}
+
+type updateValueChangeString struct {
+	OldValue string `json:"old_value"`
+	NewValue string `json:"new_value"`
 }
 
 func groupsUseLongPollServer(cfg config, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {
@@ -586,4 +596,75 @@ func docsDownload(cfg config, params docsDownloadParams) (string, error) {
 	}
 
 	return string(data), nil
+}
+
+func docsUploadAndSave(cfg config, params docsUploadParams) (docsSaveResponse, error) {
+	server, err := docsGetWallUploadServer(cfg)
+
+	if err != nil {
+		return docsSaveResponse{}, err
+	}
+
+	upload, err := docsUpload(cfg, docsUploadParams{
+		uploadURL: server.UploadURL,
+		data:      params.data,
+	})
+
+	if err != nil {
+		return docsSaveResponse{}, err
+	}
+
+	saved, err := docsSave(cfg, docsSaveParams{
+		file: upload.File,
+	})
+
+	if err != nil {
+		return docsSaveResponse{}, err
+	}
+
+	return saved, nil
+}
+
+type groupsEditParams struct {
+	website string
+}
+
+type groupsEditResult struct {
+	Error    errorResult `json:"error"`
+	Response int         `json:"response"`
+}
+
+func groupsEdit(cfg config, params groupsEditParams) (int, error) {
+	values := apiValues(cfg)
+
+	values.Set("group_id", cfg.API.ClubID)
+
+	if len(params.website) > 0 {
+		values.Set("website", params.website)
+	}
+
+	uri := apiURL(cfg, "groups.edit", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return 0, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return 0, err
+	}
+
+	result := groupsEditResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return 0, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return 0, err
+	}
+
+	return result.Response, nil
 }

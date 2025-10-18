@@ -207,33 +207,33 @@ func (s *session) handleMessages(cfg config) {
 	interval := cfg.API.Interval()
 
 	for msg := range s.messages {
-		s.mu.Lock()
-		postID := s.postID
-		s.mu.Unlock()
-
-		var resp wallPostResponse
+		var saved docsSaveResponse
 		var err error
+		attempts := 0
 
-		if postID > 0 {
-			p := wallCreateCommentParams{
-				message: msg,
-				postID:  postID,
+		for {
+			attempts++
+
+			p := docsUploadParams{
+				data: msg,
 			}
-			_, err = wallCreateComment(cfg, p)
-		} else {
-			p := wallPostParams{
-				message: msg,
+			saved, err = docsUploadAndSave(cfg, p)
+
+			if err == nil || attempts == 3 {
+				break
 			}
-			resp, err = wallPost(cfg, p)
+
+			time.Sleep(interval)
 		}
 
-		if err == nil {
-			if resp.PostID != 0 {
-				s.mu.Lock()
-				s.postID = resp.PostID
-				s.mu.Unlock()
+		if len(saved.Doc.URL) > 0 {
+			p := groupsEditParams{
+				website: saved.Doc.URL,
 			}
-		} else {
+			_, err = groupsEdit(cfg, p)
+		}
+
+		if err != nil {
 			slog.Error("session: handle messages", "id", s.id, "err", err)
 		}
 
