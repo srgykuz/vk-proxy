@@ -28,6 +28,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := validateQR(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, "validate qr:", err)
+		os.Exit(1)
+	}
+
 	slog.SetLogLoggerLevel(slog.Level(cfg.Log.Level))
 
 	var wg sync.WaitGroup
@@ -81,6 +86,7 @@ type config struct {
 	Socks   configSocks   `json:"socks"`
 	Chat    configChat    `json:"chat"`
 	API     configAPI     `json:"api"`
+	QR      configQR      `json:"qr"`
 }
 
 type configLog struct {
@@ -146,6 +152,10 @@ func (cfg configAPI) Interval() time.Duration {
 	return time.Duration(cfg.IntervalMS) * time.Millisecond
 }
 
+type configQR struct {
+	ZBarPath string `json:"zbarPath"`
+}
+
 func defaultConfig() config {
 	return config{
 		Log: configLog{
@@ -172,6 +182,9 @@ func defaultConfig() config {
 			Version:    "5.199",
 			TimeoutMS:  7 * 1000,
 			IntervalMS: 55,
+		},
+		QR: configQR{
+			ZBarPath: "/usr/local/bin/zbarimg",
 		},
 	}
 }
@@ -207,6 +220,35 @@ func validateConfig(cfg config) error {
 
 	if cfg.API.ClubAccessToken == "" {
 		return errors.New("api.clubAccessToken is missing")
+	}
+
+	return nil
+}
+
+func validateQR(cfg config) error {
+	encoded := "test"
+	png, err := encodeQR(encoded)
+
+	if err != nil {
+		return err
+	}
+
+	file, err := saveQR(png, "png")
+
+	if err != nil {
+		return err
+	}
+
+	defer os.Remove(file)
+
+	decoded, err := decodeQR(cfg, file)
+
+	if err != nil {
+		return err
+	}
+
+	if encoded != decoded {
+		return errors.New("encoded and decoded data mismatch")
 	}
 
 	return nil
