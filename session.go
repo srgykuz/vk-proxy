@@ -215,7 +215,7 @@ func (s *session) handleMessages(cfg config) {
 			attempts++
 
 			p := docsUploadParams{
-				data: msg,
+				data: []byte(msg),
 			}
 			saved, err = docsUploadAndSave(cfg, p)
 

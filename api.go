@@ -26,7 +26,7 @@ func apiValues(cfg config) url.Values {
 	}
 }
 
-func apiForm(fields map[string]string, files map[string]string) (io.Reader, string, error) {
+func apiForm(fields map[string]string, files map[string][]byte) (io.Reader, string, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -44,7 +44,7 @@ func apiForm(fields map[string]string, files map[string]string) (io.Reader, stri
 			return nil, "", err
 		}
 
-		if _, err := fw.Write([]byte(v)); err != nil {
+		if _, err := fw.Write(v); err != nil {
 			return nil, "", err
 		}
 	}
@@ -477,7 +477,7 @@ func docsGetWallUploadServer(cfg config) (docsGetWallUploadServerResponse, error
 
 type docsUploadParams struct {
 	uploadURL string
-	data      string
+	data      []byte
 }
 
 type docsUploadResult struct {
@@ -491,7 +491,7 @@ type docsUploadResponse struct {
 }
 
 func docsUpload(cfg config, params docsUploadParams) (docsUploadResponse, error) {
-	files := map[string]string{
+	files := map[string][]byte{
 		"file.txt": params.data,
 	}
 	body, ct, err := apiForm(nil, files)
