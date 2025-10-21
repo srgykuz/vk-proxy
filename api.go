@@ -19,10 +19,10 @@ func apiURL(cfg config, method string, values url.Values) string {
 	return fmt.Sprintf("%v/method/%v?%s", cfg.API.Origin, method, values.Encode())
 }
 
-func apiValues(cfg config) url.Values {
+func apiValues(cfg config, token string) url.Values {
 	return url.Values{
 		"v":            []string{cfg.API.Version},
-		"access_token": []string{cfg.API.ClubAccessToken},
+		"access_token": []string{token},
 	}
 }
 
@@ -120,7 +120,7 @@ func messagesSend(cfg config, params messagesSendParams) (int, error) {
 		return 0, err
 	}
 
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 	uri := apiURL(cfg, "messages.send", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
@@ -171,7 +171,7 @@ type message struct {
 }
 
 func messagesGetHistory(cfg config, params messagesGetHistoryParams) (messagesGetHistoryResponse, error) {
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 
 	values.Set("user_id", cfg.API.UserID)
 	values.Set("offset", fmt.Sprint(params.offset))
@@ -235,7 +235,7 @@ type groupsGetLongPollServerResponse struct {
 }
 
 func groupsGetLongPollServer(cfg config) (groupsGetLongPollServerResponse, error) {
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 
 	values.Set("group_id", cfg.API.ClubID)
 
@@ -351,7 +351,7 @@ func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
 		return wallPostResponse{}, err
 	}
 
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 	uri := apiURL(cfg, "wall.post", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
@@ -406,7 +406,7 @@ func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCo
 		return wallCreateCommentResponse{}, err
 	}
 
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 	uri := apiURL(cfg, "wall.createComment", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
@@ -445,7 +445,7 @@ type docsGetWallUploadServerResponse struct {
 }
 
 func docsGetWallUploadServer(cfg config) (docsGetWallUploadServerResponse, error) {
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 
 	values.Set("group_id", cfg.API.ClubID)
 
@@ -548,7 +548,7 @@ type document struct {
 }
 
 func docsSave(cfg config, params docsSaveParams) (docsSaveResponse, error) {
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 
 	values.Set("file", params.file)
 
@@ -635,7 +635,7 @@ type groupsEditResult struct {
 }
 
 func groupsEdit(cfg config, params groupsEditParams) (int, error) {
-	values := apiValues(cfg)
+	values := apiValues(cfg, cfg.API.ClubAccessToken)
 
 	values.Set("group_id", cfg.API.ClubID)
 
