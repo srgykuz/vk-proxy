@@ -86,6 +86,26 @@ func apiDo(cfg config, req *http.Request) ([]byte, error) {
 	return data, nil
 }
 
+type apiDownloadParams struct {
+	url string
+}
+
+func apiDownload(cfg config, params apiDownloadParams) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, params.url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
 type errorResult struct {
 	ErrorCode int    `json:"error_code"`
 	ErrorMsg  string `json:"error_msg"`
@@ -578,26 +598,6 @@ func docsSave(cfg config, params docsSaveParams) (docsSaveResponse, error) {
 	return result.Response, nil
 }
 
-type docsDownloadParams struct {
-	url string
-}
-
-func docsDownload(cfg config, params docsDownloadParams) (string, error) {
-	req, err := http.NewRequest(http.MethodGet, params.url, nil)
-
-	if err != nil {
-		return "", err
-	}
-
-	data, err := apiDo(cfg, req)
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
-}
-
 func docsUploadAndSave(cfg config, params docsUploadParams) (docsSaveResponse, error) {
 	server, err := docsGetWallUploadServer(cfg)
 
@@ -667,4 +667,186 @@ func groupsEdit(cfg config, params groupsEditParams) (int, error) {
 	}
 
 	return result.Response, nil
+}
+
+type photosGetUploadServerResult struct {
+	Error    errorResult                   `json:"error"`
+	Response photosGetUploadServerResponse `json:"response"`
+}
+
+type photosGetUploadServerResponse struct {
+	UploadURL string `json:"upload_url"`
+}
+
+func photosGetUploadServer(cfg config) (photosGetUploadServerResponse, error) {
+	values := apiValues(cfg.API.UserAccessToken)
+
+	values.Set("group_id", cfg.API.ClubID)
+	values.Set("album_id", cfg.API.AlbumID)
+
+	uri := apiURL("photos.getUploadServer", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return photosGetUploadServerResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return photosGetUploadServerResponse{}, err
+	}
+
+	result := photosGetUploadServerResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return photosGetUploadServerResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return photosGetUploadServerResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
+type photosUploadParams struct {
+	uploadURL string
+	data      []byte
+}
+
+type photosUploadResult struct {
+	Error      string `json:"error"`
+	ErrorDescr string `json:"error_descr"`
+	photosUploadResponse
+}
+
+type photosUploadResponse struct {
+	Server     int    `json:"server"`
+	PhotosList string `json:"photos_list"`
+	Hash       string `json:"hash"`
+}
+
+func photosUpload(cfg config, params photosUploadParams) (photosUploadResponse, error) {
+	files := map[string][]byte{
+		"file1.png": params.data,
+	}
+	body, ct, err := apiForm(nil, files)
+
+	if err != nil {
+		return photosUploadResponse{}, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, params.uploadURL, body)
+
+	if err != nil {
+		return photosUploadResponse{}, err
+	}
+
+	req.Header.Set("Content-Type", ct)
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return photosUploadResponse{}, err
+	}
+
+	result := photosUploadResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return photosUploadResponse{}, err
+	}
+
+	if len(result.Error) > 0 {
+		return photosUploadResponse{}, errors.New(result.Error)
+	}
+
+	if result.PhotosList == "" || result.PhotosList == "[]" {
+		return photosUploadResponse{}, errors.New("not uploaded")
+	}
+
+	return result.photosUploadResponse, nil
+}
+
+type photosSaveParams struct {
+	photosList string
+	server     int
+	hash       string
+}
+
+type photosSaveResult struct {
+	Error    errorResult          `json:"error"`
+	Response []photosSaveResponse `json:"response"`
+}
+
+type photosSaveResponse struct {
+	ID int `json:"id"`
+}
+
+func photosSave(cfg config, params photosSaveParams) (photosSaveResponse, error) {
+	values := apiValues(cfg.API.UserAccessToken)
+
+	values.Set("group_id", cfg.API.ClubID)
+	values.Set("album_id", cfg.API.AlbumID)
+	values.Set("photos_list", params.photosList)
+	values.Set("server", fmt.Sprint(params.server))
+	values.Set("hash", params.hash)
+
+	uri := apiURL("photos.save", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return photosSaveResponse{}, err
+	}
+
+	data, err := apiDo(cfg, req)
+
+	if err != nil {
+		return photosSaveResponse{}, err
+	}
+
+	result := photosSaveResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return photosSaveResponse{}, err
+	}
+
+	if err := result.Error.check(); err != nil {
+		return photosSaveResponse{}, err
+	}
+
+	if len(result.Response) == 0 {
+		return photosSaveResponse{}, errors.New("empty response")
+	}
+
+	return result.Response[0], nil
+}
+
+func photosUploadAndSave(cfg config, params photosUploadParams) (photosSaveResponse, error) {
+	server, err := photosGetUploadServer(cfg)
+
+	if err != nil {
+		return photosSaveResponse{}, err
+	}
+
+	upload, err := photosUpload(cfg, photosUploadParams{
+		uploadURL: server.UploadURL,
+		data:      params.data,
+	})
+
+	if err != nil {
+		return photosSaveResponse{}, err
+	}
+
+	saved, err := photosSave(cfg, photosSaveParams{
+		photosList: upload.PhotosList,
+		server:     upload.Server,
+		hash:       upload.Hash,
+	})
+
+	if err != nil {
+		return photosSaveResponse{}, err
+	}
+
+	return saved, nil
 }

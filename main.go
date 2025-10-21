@@ -141,6 +141,7 @@ type configAPI struct {
 	UserAccessToken string `json:"userAccessToken"`
 	ClubID          string `json:"clubID"`
 	ClubAccessToken string `json:"clubAccessToken"`
+	AlbumID         string `json:"albumID"`
 }
 
 func (cfg configAPI) Timeout() time.Duration {
@@ -221,6 +222,10 @@ func validateConfig(cfg config) error {
 
 	if cfg.API.ClubAccessToken == "" {
 		return errors.New("api.clubAccessToken is missing")
+	}
+
+	if cfg.API.AlbumID == "" {
+		return errors.New("api.albumID is missing")
 	}
 
 	return nil

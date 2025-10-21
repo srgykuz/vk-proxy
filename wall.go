@@ -51,16 +51,17 @@ func listenWall(cfg config) error {
 }
 
 func handleUpdate(cfg config, upd update) error {
-	var encoded string
+	var encodedS string
+	var encodedB []byte
 	var err error
 
 	if len(upd.Object.Text) > 0 {
-		encoded = upd.Object.Text
+		encodedS = upd.Object.Text
 	} else if len(upd.Object.Changes.Website.NewValue) > 0 {
-		p := docsDownloadParams{
+		p := apiDownloadParams{
 			url: upd.Object.Changes.Website.NewValue,
 		}
-		encoded, err = docsDownload(cfg, p)
+		encodedB, err = apiDownload(cfg, p)
 	} else {
 		err = fmt.Errorf("unsupported update: %v", upd.Type)
 	}
@@ -69,7 +70,11 @@ func handleUpdate(cfg config, upd update) error {
 		return err
 	}
 
-	dg, err := handleEncodedDatagram(encoded)
+	if len(encodedB) > 0 {
+		encodedS = string(encodedB)
+	}
+
+	dg, err := handleEncodedDatagram(encodedS)
 
 	if err != nil {
 		return err
@@ -82,7 +87,7 @@ func handleUpdate(cfg config, upd update) error {
 	slog.Debug("wall: update", "type", upd.Type, "dg", dg)
 
 	if cfg.Log.Payload {
-		slog.Debug("wall: update", "type", upd.Type, "encoded", encoded, "payload", bytesToHex(dg.payload))
+		slog.Debug("wall: update", "type", upd.Type, "encoded", encodedS, "payload", bytesToHex(dg.payload))
 	}
 
 	return handleDatagram(cfg, dg)
