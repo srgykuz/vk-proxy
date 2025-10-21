@@ -14,7 +14,7 @@ func encodeQR(content string) ([]byte, error) {
 		return nil, errors.New("content is too large")
 	}
 
-	qr, err := qrcode.NewWithForcedVersion(content, 40, qrcode.Low)
+	qr, err := qrcode.New(content, qrcode.Low)
 
 	if err != nil {
 		return nil, err
