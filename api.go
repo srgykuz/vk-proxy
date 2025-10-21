@@ -13,15 +13,15 @@ import (
 	"strings"
 )
 
-func apiURL(cfg config, method string, values url.Values) string {
+func apiURL(method string, values url.Values) string {
 	method = strings.TrimPrefix(method, "/")
 
-	return fmt.Sprintf("%v/method/%v?%s", cfg.API.Origin, method, values.Encode())
+	return fmt.Sprintf("https://api.vk.ru/method/%v?%s", method, values.Encode())
 }
 
-func apiValues(cfg config, token string) url.Values {
+func apiValues(token string) url.Values {
 	return url.Values{
-		"v":            []string{cfg.API.Version},
+		"v":            []string{"5.199"},
 		"access_token": []string{token},
 	}
 }
@@ -120,8 +120,8 @@ func messagesSend(cfg config, params messagesSendParams) (int, error) {
 		return 0, err
 	}
 
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
-	uri := apiURL(cfg, "messages.send", values)
+	values := apiValues(cfg.API.ClubAccessToken)
+	uri := apiURL("messages.send", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
 	if err != nil {
@@ -171,14 +171,14 @@ type message struct {
 }
 
 func messagesGetHistory(cfg config, params messagesGetHistoryParams) (messagesGetHistoryResponse, error) {
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
+	values := apiValues(cfg.API.ClubAccessToken)
 
 	values.Set("user_id", cfg.API.UserID)
 	values.Set("offset", fmt.Sprint(params.offset))
 	values.Set("count", fmt.Sprint(params.count))
 	values.Set("rev", fmt.Sprint(params.rev))
 
-	uri := apiURL(cfg, "messages.getHistory", values)
+	uri := apiURL("messages.getHistory", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 
 	if err != nil {
@@ -235,11 +235,11 @@ type groupsGetLongPollServerResponse struct {
 }
 
 func groupsGetLongPollServer(cfg config) (groupsGetLongPollServerResponse, error) {
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
+	values := apiValues(cfg.API.ClubAccessToken)
 
 	values.Set("group_id", cfg.API.ClubID)
 
-	uri := apiURL(cfg, "groups.getLongPollServer", values)
+	uri := apiURL("groups.getLongPollServer", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 
 	if err != nil {
@@ -351,8 +351,8 @@ func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
 		return wallPostResponse{}, err
 	}
 
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
-	uri := apiURL(cfg, "wall.post", values)
+	values := apiValues(cfg.API.ClubAccessToken)
+	uri := apiURL("wall.post", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
 	if err != nil {
@@ -406,8 +406,8 @@ func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCo
 		return wallCreateCommentResponse{}, err
 	}
 
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
-	uri := apiURL(cfg, "wall.createComment", values)
+	values := apiValues(cfg.API.ClubAccessToken)
+	uri := apiURL("wall.createComment", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
 	if err != nil {
@@ -445,11 +445,11 @@ type docsGetWallUploadServerResponse struct {
 }
 
 func docsGetWallUploadServer(cfg config) (docsGetWallUploadServerResponse, error) {
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
+	values := apiValues(cfg.API.ClubAccessToken)
 
 	values.Set("group_id", cfg.API.ClubID)
 
-	uri := apiURL(cfg, "docs.getWallUploadServer", values)
+	uri := apiURL("docs.getWallUploadServer", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 
 	if err != nil {
@@ -548,11 +548,11 @@ type document struct {
 }
 
 func docsSave(cfg config, params docsSaveParams) (docsSaveResponse, error) {
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
+	values := apiValues(cfg.API.ClubAccessToken)
 
 	values.Set("file", params.file)
 
-	uri := apiURL(cfg, "docs.save", values)
+	uri := apiURL("docs.save", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 
 	if err != nil {
@@ -635,7 +635,7 @@ type groupsEditResult struct {
 }
 
 func groupsEdit(cfg config, params groupsEditParams) (int, error) {
-	values := apiValues(cfg, cfg.API.ClubAccessToken)
+	values := apiValues(cfg.API.ClubAccessToken)
 
 	values.Set("group_id", cfg.API.ClubID)
 
@@ -643,7 +643,7 @@ func groupsEdit(cfg config, params groupsEditParams) (int, error) {
 		values.Set("website", params.website)
 	}
 
-	uri := apiURL(cfg, "groups.edit", values)
+	uri := apiURL("groups.edit", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 
 	if err != nil {

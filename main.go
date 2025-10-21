@@ -135,8 +135,6 @@ func (cfg configChat) CheckInterval() time.Duration {
 }
 
 type configAPI struct {
-	Origin          string `json:"origin"`
-	Version         string `json:"version"`
 	TimeoutMS       int    `json:"timeout"`
 	IntervalMS      int    `json:"interval"`
 	UserID          string `json:"userID"`
@@ -179,8 +177,6 @@ func defaultConfig() config {
 			FetchCount:      10,
 		},
 		API: configAPI{
-			Origin:     "https://api.vk.ru",
-			Version:    "5.199",
 			TimeoutMS:  7 * 1000,
 			IntervalMS: 55,
 		},
