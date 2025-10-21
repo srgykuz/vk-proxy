@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"os"
 )
 
 func listenWall(cfg config) error {
@@ -62,6 +63,8 @@ func handleUpdate(cfg config, upd update) error {
 			url: upd.Object.Changes.Website.NewValue,
 		}
 		encodedB, err = apiDownload(cfg, p)
+	} else if len(upd.Object.OrigPhoto.URL) > 0 {
+		encodedS, err = handlePhoto(cfg, upd.Object.OrigPhoto.URL)
 	} else {
 		err = fmt.Errorf("unsupported update: %v", upd.Type)
 	}
@@ -91,4 +94,31 @@ func handleUpdate(cfg config, upd update) error {
 	}
 
 	return handleDatagram(cfg, dg)
+}
+
+func handlePhoto(cfg config, url string) (string, error) {
+	p := apiDownloadParams{
+		url: url,
+	}
+	b, err := apiDownload(cfg, p)
+
+	if err != nil {
+		return "", fmt.Errorf("apiDownload: %v", err)
+	}
+
+	file, err := saveQR(b, "jpg")
+
+	if err != nil {
+		return "", fmt.Errorf("saveQR: %v", err)
+	}
+
+	defer os.Remove(file)
+
+	s, err := decodeQR(cfg, file)
+
+	if err != nil {
+		return "", fmt.Errorf("decodeQR: %v", err)
+	}
+
+	return s, nil
 }

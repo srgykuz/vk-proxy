@@ -300,10 +300,11 @@ type update struct {
 }
 
 type updateObject struct {
-	ID      int           `json:"id"`
-	Date    int           `json:"date"`
-	Text    string        `json:"text"`
-	Changes updateChanges `json:"changes"`
+	ID        int           `json:"id"`
+	Date      int           `json:"date"`
+	Text      string        `json:"text"`
+	Changes   updateChanges `json:"changes"`
+	OrigPhoto updatePhoto   `json:"orig_photo"`
 }
 
 type updateChanges struct {
@@ -313,6 +314,10 @@ type updateChanges struct {
 type updateValueChangeString struct {
 	OldValue string `json:"old_value"`
 	NewValue string `json:"new_value"`
+}
+
+type updatePhoto struct {
+	URL string `json:"url"`
 }
 
 func groupsUseLongPollServer(cfg config, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {

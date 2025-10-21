@@ -207,30 +207,15 @@ func (s *session) handleMessages(cfg config) {
 	interval := cfg.API.Interval()
 
 	for msg := range s.messages {
-		var saved docsSaveResponse
-		var err error
-		attempts := 0
+		qr, err := encodeQR(msg)
 
-		for {
-			attempts++
-
-			p := docsUploadParams{
-				data: []byte(msg),
+		if err == nil {
+			p := photosUploadParams{
+				data: qr,
 			}
-			saved, err = docsUploadAndSave(cfg, p)
-
-			if err == nil || attempts == 3 {
-				break
-			}
-
-			time.Sleep(interval)
-		}
-
-		if len(saved.Doc.URL) > 0 {
-			p := groupsEditParams{
-				website: saved.Doc.URL,
-			}
-			_, err = groupsEdit(cfg, p)
+			_, err = photosUploadAndSave(cfg, p)
+		} else {
+			err = fmt.Errorf("encodeQR: %v", err)
 		}
 
 		if err != nil {
