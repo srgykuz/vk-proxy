@@ -76,33 +76,40 @@ type readBuffer struct {
 	b    *bytes.Buffer
 	mu   *sync.Mutex
 	done chan struct{}
-	errs []error
 }
 
 func handleSocks(cfg config, ses *session, stage int) error {
 	var wg sync.WaitGroup
-	var err error
+	var readErr error
+	var fwdErr error
 	buf := readBuffer{
 		b:    &bytes.Buffer{},
 		mu:   &sync.Mutex{},
 		done: make(chan struct{}),
-		errs: []error{},
 	}
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer close(buf.done)
-		err = readSocks(cfg, ses, stage, buf)
+
+		readErr = readSocks(cfg, ses, stage, buf)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		forwardsSocks(cfg, ses, buf)
+
+		fwdErr = forwardsSocks(cfg, ses, buf)
+
+		if fwdErr != nil {
+			ses.peer.Close()
+		}
 	}()
 
 	wg.Wait()
+
+	err := errors.Join(readErr, fwdErr)
 
 	return err
 }
@@ -151,13 +158,7 @@ func readSocks(cfg config, ses *session, stage int, buf readBuffer) error {
 				stage = stageForward
 			case stageForward:
 				buf.mu.Lock()
-
-				if len(buf.errs) > 0 {
-					err = buf.errs[0]
-				} else {
-					buf.b.Write(in)
-				}
-
+				buf.b.Write(in)
 				buf.mu.Unlock()
 			default:
 				err = fmt.Errorf("read: unknown stage: %v", stage)
@@ -184,7 +185,7 @@ func readSocks(cfg config, ses *session, stage int, buf readBuffer) error {
 	}
 }
 
-func forwardsSocks(cfg config, ses *session, buf readBuffer) {
+func forwardsSocks(cfg config, ses *session, buf readBuffer) error {
 	interval := cfg.Socks.ForwardInterval()
 
 	for {
@@ -213,14 +214,12 @@ func forwardsSocks(cfg config, ses *session, buf readBuffer) {
 			err := handleSocksStageForward(ses, in, cfg.Socks.ForwardSize)
 
 			if err != nil {
-				buf.mu.Lock()
-				buf.errs = append(buf.errs, err)
-				buf.mu.Unlock()
+				return err
 			}
 		}
 
 		if stop {
-			return
+			return nil
 		}
 	}
 }
