@@ -232,14 +232,14 @@ func validateConfig(cfg config) error {
 }
 
 func validateQR(cfg config) error {
-	encoded := "test"
-	png, err := encodeQR(encoded)
+	content := "test"
+	data, err := encodeQR(content)
 
 	if err != nil {
 		return err
 	}
 
-	file, err := saveQR(png, "png")
+	file, err := saveQR(data, "png")
 
 	if err != nil {
 		return err
@@ -253,8 +253,12 @@ func validateQR(cfg config) error {
 		return err
 	}
 
-	if encoded != decoded {
-		return errors.New("encoded and decoded data mismatch")
+	if len(decoded) != 1 {
+		return errors.New("unexpected decoded data size")
+	}
+
+	if content != decoded[0] {
+		return errors.New("encoded and decoded content mismatch")
 	}
 
 	return nil

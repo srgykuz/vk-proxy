@@ -77,6 +77,7 @@ type session struct {
 	closed    bool
 	writes    chan []byte
 	messages  chan string
+	forwards  chan []byte
 	sigConn   chan struct{}
 	sigConnCl bool
 	postID    int
@@ -94,6 +95,7 @@ func openSession(id int32, cfg config) (*session, error) {
 		closed:    false,
 		writes:    make(chan []byte, 500),
 		messages:  make(chan string, 500),
+		forwards:  make(chan []byte, 500),
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
 		postID:    0,
@@ -109,6 +111,12 @@ func openSession(id int32, cfg config) (*session, error) {
 	go func() {
 		defer s.wg.Done()
 		s.handleMessages(cfg)
+	}()
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.handleForwards(cfg)
 	}()
 
 	return s, nil
@@ -135,6 +143,7 @@ func (s *session) close() {
 
 	close(s.writes)
 	close(s.messages)
+	close(s.forwards)
 
 	s.wg.Wait()
 
@@ -220,6 +229,70 @@ func (s *session) handleMessages(cfg config) {
 
 		if err != nil {
 			slog.Error("session: handle messages", "id", s.id, "err", err)
+		}
+
+		time.Sleep(interval)
+	}
+}
+
+func (s *session) forward(pld []byte) error {
+	clone := make([]byte, len(pld))
+	copy(clone, pld)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return errSessionClosed
+	}
+
+	select {
+	case s.forwards <- clone:
+		return nil
+	default:
+		return errors.New("forward: queue is full")
+	}
+}
+
+func (s *session) handleForwards(cfg config) {
+	interval := cfg.API.Interval()
+	encode := func(pld []byte) ([]byte, error) {
+		chunks := bytesToChunks(pld, 2000)
+		data := [][]byte{}
+
+		for _, chunk := range chunks {
+			num := s.nextNumber()
+			dg := newDatagram(s.id, num, commandForward, chunk)
+			content := encodeDatagram(dg)
+
+			slog.Debug("session: forward", "id", s.id, "dg", dg)
+
+			qr, err := encodeQR(content)
+
+			if err != nil {
+				return nil, err
+			}
+
+			data = append(data, qr)
+		}
+
+		return mergeQR(data)
+	}
+
+	for pld := range s.forwards {
+		qr, err := encode(pld)
+
+		if err == nil {
+			p := photosUploadParams{
+				data: qr,
+			}
+			_, err = photosUploadAndSave(cfg, p)
+		} else {
+			err = fmt.Errorf("encode: %v", err)
+		}
+
+		if err != nil {
+			slog.Error("session: handle forwards", "id", s.id, "err", err)
 		}
 
 		time.Sleep(interval)
