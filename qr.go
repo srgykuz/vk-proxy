@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -11,7 +13,7 @@ import (
 
 func encodeQR(content string) ([]byte, error) {
 	if len(content) > 2953 {
-		return nil, errors.New("content is too large")
+		return nil, fmt.Errorf("too large content: %v", len(content))
 	}
 
 	qr, err := qrcode.New(content, qrcode.Low)
@@ -20,7 +22,7 @@ func encodeQR(content string) ([]byte, error) {
 		return nil, err
 	}
 
-	png, err := qr.PNG(256)
+	png, err := qr.PNG(512)
 
 	if err != nil {
 		return nil, err
@@ -30,22 +32,42 @@ func encodeQR(content string) ([]byte, error) {
 }
 
 func decodeQR(cfg config, file string) (string, error) {
+	buf := bytes.Buffer{}
+
 	cmd := exec.Command(cfg.QR.ZBarPath, file)
-	output, err := cmd.Output()
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	err := cmd.Run()
+	output := buf.String()
 
 	if err != nil {
+		if strings.Contains(output, "scanned 0 barcode symbols") {
+			return "", errors.New("qr code is not detected")
+		} else if len(output) > 0 {
+			return "", fmt.Errorf("%v: %v", err, output)
+		}
+
 		return "", err
 	}
 
-	result, found := strings.CutPrefix(string(output), "QR-Code:")
+	lines := strings.Split(output, "\n")
+	content := ""
 
-	if !found {
-		return "", errors.New("unexpected output")
+	for _, line := range lines {
+		s, found := strings.CutPrefix(line, "QR-Code:")
+
+		if found {
+			content = s
+			break
+		}
 	}
 
-	result = strings.Trim(result, "\n")
+	if len(content) == 0 {
+		return "", fmt.Errorf("unexpected output: %v", output)
+	}
 
-	return result, nil
+	return content, nil
 }
 
 func saveQR(data []byte, ext string) (string, error) {
