@@ -15,20 +15,26 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
-const qrSize = 512
-
-func encodeQR(content string) ([]byte, error) {
-	if len(content) > 2953 {
-		return nil, fmt.Errorf("too large content: %v", len(content))
+func encodeQR(cfg config, content string) ([]byte, error) {
+	level := qrcode.RecoveryLevel(cfg.QR.ImageLevel)
+	limits := map[qrcode.RecoveryLevel]int{
+		qrcode.Low:     2953,
+		qrcode.Medium:  2331,
+		qrcode.High:    1663,
+		qrcode.Highest: 1273,
 	}
 
-	qr, err := qrcode.New(content, qrcode.Low)
+	if len(content) > limits[level] {
+		return nil, fmt.Errorf("too large content: %v > %v", len(content), limits[level])
+	}
+
+	qr, err := qrcode.New(content, level)
 
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := qr.PNG(qrSize)
+	data, err := qr.PNG(cfg.QR.ImageSize)
 
 	if err != nil {
 		return nil, err
@@ -75,14 +81,14 @@ func decodeQR(cfg config, file string) ([]string, error) {
 	return content, nil
 }
 
-func saveQR(data []byte, ext string) (string, error) {
+func saveQR(cfg config, data []byte, ext string) (string, error) {
 	pattern := "qr-*"
 
 	if len(ext) > 0 {
 		pattern += "." + ext
 	}
 
-	f, err := os.CreateTemp("", pattern)
+	f, err := os.CreateTemp(cfg.QR.SaveDir, pattern)
 
 	if err != nil {
 		return "", err
@@ -101,7 +107,7 @@ func saveQR(data []byte, ext string) (string, error) {
 	return f.Name(), nil
 }
 
-func mergeQR(data [][]byte) ([]byte, error) {
+func mergeQR(cfg config, data [][]byte) ([]byte, error) {
 	n := len(data)
 
 	if n == 0 {
@@ -112,8 +118,9 @@ func mergeQR(data [][]byte) ([]byte, error) {
 	cols := side
 	rows := int(math.Ceil(float64(n) / float64(cols)))
 
-	width := cols * qrSize
-	height := rows * qrSize
+	size := cfg.QR.ImageSize
+	width := cols * size
+	height := rows * size
 
 	rect := image.Rect(0, 0, width, height)
 	merged := image.NewNRGBA(rect)
@@ -127,15 +134,15 @@ func mergeQR(data [][]byte) ([]byte, error) {
 			return nil, fmt.Errorf("image decode: %v", err)
 		}
 
-		if img.Bounds().Dx() != qrSize || img.Bounds().Dy() != qrSize {
+		if img.Bounds().Dx() != size || img.Bounds().Dy() != size {
 			return nil, fmt.Errorf("image size: %vx%v", img.Bounds().Dx(), img.Bounds().Dy())
 		}
 
 		rowN := i / cols
 		colN := i % cols
 
-		offsetX := colN * qrSize
-		offsetY := rowN * qrSize
+		offsetX := colN * size
+		offsetY := rowN * size
 
 		point := image.Point{offsetX, offsetY}
 

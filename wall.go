@@ -116,7 +116,7 @@ func handlePhoto(cfg config, url string) ([]datagram, error) {
 		return nil, fmt.Errorf("apiDownload: %v", err)
 	}
 
-	file, err := saveQR(b, "jpg")
+	file, err := saveQR(cfg, b, "jpg")
 
 	if err != nil {
 		return nil, fmt.Errorf("saveQR: %v", err)

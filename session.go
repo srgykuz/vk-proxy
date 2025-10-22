@@ -216,7 +216,7 @@ func (s *session) handleMessages(cfg config) {
 	interval := cfg.API.Interval()
 
 	for msg := range s.messages {
-		qr, err := encodeQR(msg)
+		qr, err := encodeQR(cfg, msg)
 
 		if err == nil {
 			p := photosUploadParams{
@@ -257,7 +257,7 @@ func (s *session) forward(pld []byte) error {
 func (s *session) handleForwards(cfg config) {
 	interval := cfg.API.Interval()
 	encode := func(pld []byte) ([]byte, error) {
-		chunks := bytesToChunks(pld, 2000)
+		chunks := bytesToChunks(pld, cfg.QR.MergeSize)
 		data := [][]byte{}
 
 		for _, chunk := range chunks {
@@ -267,7 +267,7 @@ func (s *session) handleForwards(cfg config) {
 
 			slog.Debug("session: forward", "id", s.id, "dg", dg)
 
-			qr, err := encodeQR(content)
+			qr, err := encodeQR(cfg, content)
 
 			if err != nil {
 				return nil, err
@@ -276,7 +276,7 @@ func (s *session) handleForwards(cfg config) {
 			data = append(data, qr)
 		}
 
-		return mergeQR(data)
+		return mergeQR(cfg, data)
 	}
 
 	for pld := range s.forwards {

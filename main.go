@@ -153,7 +153,11 @@ func (cfg configAPI) Interval() time.Duration {
 }
 
 type configQR struct {
-	ZBarPath string `json:"zbarPath"`
+	ZBarPath   string `json:"zbarPath"`
+	ImageSize  int    `json:"imageSize"`
+	ImageLevel int    `json:"imageLevel"`
+	MergeSize  int    `json:"mergeSize"`
+	SaveDir    string `json:"saveDir"`
 }
 
 func defaultConfig() config {
@@ -182,7 +186,10 @@ func defaultConfig() config {
 			IntervalMS: 55,
 		},
 		QR: configQR{
-			ZBarPath: "/usr/local/bin/zbarimg",
+			ZBarPath:   "/usr/local/bin/zbarimg",
+			ImageSize:  512,
+			MergeSize:  2000,
+			ImageLevel: 1,
 		},
 	}
 }
@@ -233,13 +240,13 @@ func validateConfig(cfg config) error {
 
 func validateQR(cfg config) error {
 	content := "test"
-	data, err := encodeQR(content)
+	data, err := encodeQR(cfg, content)
 
 	if err != nil {
 		return err
 	}
 
-	file, err := saveQR(data, "png")
+	file, err := saveQR(cfg, data, "png")
 
 	if err != nil {
 		return err
