@@ -15,10 +15,14 @@ const (
 	commandClose
 )
 
+var (
+	errDatagramMalformed = errors.New("datagram is malformed")
+)
+
 var deviceID = time.Now().UnixMilli()
 
 type datagram struct {
-	version  int16
+	version  uint16
 	checksum uint32
 	device   int64
 	session  int32
@@ -66,9 +70,9 @@ func newDatagram(ses int32, num int32, cmd int16, pld []byte) datagram {
 }
 
 func encodeDatagram(dg datagram) string {
-	data := []byte{}
+	data := make([]byte, 0, 24+len(dg.payload))
 
-	data = binary.BigEndian.AppendUint16(data, uint16(dg.version))
+	data = binary.BigEndian.AppendUint16(data, dg.version)
 	data = binary.BigEndian.AppendUint32(data, dg.checksum)
 	data = binary.BigEndian.AppendUint64(data, uint64(dg.device))
 	data = binary.BigEndian.AppendUint32(data, uint32(dg.session))
@@ -92,10 +96,10 @@ func decodeDatagram(s string) (datagram, error) {
 	}
 
 	if len(data) < 24 {
-		return datagram{}, errors.New("malformed datagram")
+		return datagram{}, errDatagramMalformed
 	}
 
-	ver := int16(binary.BigEndian.Uint16(data[0:2]))
+	ver := binary.BigEndian.Uint16(data[0:2])
 	sum := binary.BigEndian.Uint32(data[2:6])
 	dev := int64(binary.BigEndian.Uint64(data[6:14]))
 	ses := int32(binary.BigEndian.Uint32(data[14:18]))
@@ -107,7 +111,7 @@ func decodeDatagram(s string) (datagram, error) {
 	crc := crc32.ChecksumIEEE(data)
 
 	if sum != crc {
-		return datagram{}, errors.New("malformed datagram")
+		return datagram{}, errDatagramMalformed
 	}
 
 	dg := datagram{
@@ -137,14 +141,11 @@ func (pld *payloadConnect) encode() []byte {
 
 func (pld *payloadConnect) decode(data []byte) error {
 	if len(data) < 2 {
-		return errors.New("malformed payload")
+		return errDatagramMalformed
 	}
 
-	hostb := data[:len(data)-2]
-	pld.host = string(hostb)
-
-	portb := data[len(data)-2:]
-	pld.port = binary.BigEndian.Uint16(portb)
+	pld.host = string(data[:len(data)-2])
+	pld.port = binary.BigEndian.Uint16(data[len(data)-2:])
 
 	return nil
 }
