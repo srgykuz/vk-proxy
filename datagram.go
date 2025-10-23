@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"time"
 )
 
@@ -17,20 +18,22 @@ const (
 var deviceID = time.Now().UnixMilli()
 
 type datagram struct {
-	version int16
-	device  int64
-	session int32
-	number  int32
-	command int16
-	payload []byte
+	version  int16
+	checksum uint32
+	device   int64
+	session  int32
+	number   int32
+	command  int16
+	payload  []byte
 }
 
 func (dg datagram) String() string {
+	sumShort := dg.checksum % 1000
 	devShort := dg.device % 1000
 
 	return fmt.Sprintf(
-		"ver=%v dev=%v ses=%v num=%v cmd=%v pld=%v",
-		dg.version, devShort, dg.session, dg.number, dg.command, len(dg.payload),
+		"ver=%v sum=%v dev=%v ses=%v num=%v cmd=%v pld=%v",
+		dg.version, sumShort, devShort, dg.session, dg.number, dg.command, len(dg.payload),
 	)
 }
 
@@ -52,12 +55,13 @@ func (dg datagram) clone() datagram {
 
 func newDatagram(ses int32, num int32, cmd int16, pld []byte) datagram {
 	return datagram{
-		version: 1,
-		device:  deviceID,
-		session: ses,
-		number:  num,
-		command: cmd,
-		payload: pld,
+		version:  1,
+		checksum: 0,
+		device:   deviceID,
+		session:  ses,
+		number:   num,
+		command:  cmd,
+		payload:  pld,
 	}
 }
 
@@ -65,11 +69,15 @@ func encodeDatagram(dg datagram) string {
 	data := []byte{}
 
 	data = binary.BigEndian.AppendUint16(data, uint16(dg.version))
+	data = binary.BigEndian.AppendUint32(data, dg.checksum)
 	data = binary.BigEndian.AppendUint64(data, uint64(dg.device))
 	data = binary.BigEndian.AppendUint32(data, uint32(dg.session))
 	data = binary.BigEndian.AppendUint32(data, uint32(dg.number))
 	data = binary.BigEndian.AppendUint16(data, uint16(dg.command))
 	data = append(data, dg.payload...)
+
+	crc := crc32.ChecksumIEEE(data)
+	binary.BigEndian.PutUint32(data[2:6], crc)
 
 	s := base64.StdEncoding.EncodeToString(data)
 
@@ -83,24 +91,33 @@ func decodeDatagram(s string) (datagram, error) {
 		return datagram{}, err
 	}
 
-	if len(data) < 20 {
+	if len(data) < 24 {
 		return datagram{}, errors.New("malformed datagram")
 	}
 
 	ver := int16(binary.BigEndian.Uint16(data[0:2]))
-	dev := int64(binary.BigEndian.Uint64(data[2:10]))
-	ses := int32(binary.BigEndian.Uint32(data[10:14]))
-	num := int32(binary.BigEndian.Uint32(data[14:18]))
-	cmd := int16(binary.BigEndian.Uint16(data[18:20]))
-	pld := data[20:]
+	sum := binary.BigEndian.Uint32(data[2:6])
+	dev := int64(binary.BigEndian.Uint64(data[6:14]))
+	ses := int32(binary.BigEndian.Uint32(data[14:18]))
+	num := int32(binary.BigEndian.Uint32(data[18:22]))
+	cmd := int16(binary.BigEndian.Uint16(data[22:24]))
+	pld := data[24:]
+
+	binary.BigEndian.PutUint32(data[2:6], 0)
+	crc := crc32.ChecksumIEEE(data)
+
+	if sum != crc {
+		return datagram{}, errors.New("malformed datagram")
+	}
 
 	dg := datagram{
-		version: ver,
-		device:  dev,
-		session: ses,
-		number:  num,
-		command: cmd,
-		payload: pld,
+		version:  ver,
+		checksum: sum,
+		device:   dev,
+		session:  ses,
+		number:   num,
+		command:  cmd,
+		payload:  pld,
 	}
 
 	return dg, nil
