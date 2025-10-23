@@ -11,7 +11,6 @@ type config struct {
 	Log     configLog     `json:"log"`
 	Session configSession `json:"session"`
 	Socks   configSocks   `json:"socks"`
-	Chat    configChat    `json:"chat"`
 	API     configAPI     `json:"api"`
 	QR      configQR      `json:"qr"`
 }
@@ -49,16 +48,6 @@ func (cfg configSocks) WriteTimeout() time.Duration {
 
 func (cfg configSocks) ForwardInterval() time.Duration {
 	return time.Duration(cfg.ForwardIntervalMS) * time.Millisecond
-}
-
-type configChat struct {
-	CheckIntervalMS int `json:"checkInterval"`
-	FetchCount      int `json:"fetchCount"`
-	FetchOffset     int `json:"fetchOffset"`
-}
-
-func (cfg configChat) CheckInterval() time.Duration {
-	return time.Duration(cfg.CheckIntervalMS) * time.Millisecond
 }
 
 type configAPI struct {
@@ -103,10 +92,6 @@ func defaultConfig() config {
 			WriteTimeoutMS:    10 * 1000,
 			ForwardSize:       3000,
 			ForwardIntervalMS: 300,
-		},
-		Chat: configChat{
-			CheckIntervalMS: 1000,
-			FetchCount:      10,
 		},
 		API: configAPI{
 			TimeoutMS:  7 * 1000,

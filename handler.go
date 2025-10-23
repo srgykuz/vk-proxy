@@ -7,48 +7,9 @@ import (
 	"net"
 	"os"
 	"sort"
-	"time"
 )
 
-func listenChat(cfg config) error {
-	last, err := messagesGetLatest(cfg)
-
-	if err != nil {
-		return err
-	}
-
-	slog.Info("chat: listening")
-
-	for {
-		time.Sleep(cfg.Chat.CheckInterval())
-
-		p := messagesGetHistoryParams{
-			offset: last.ID + cfg.Chat.FetchOffset,
-			count:  cfg.Chat.FetchCount,
-			rev:    1,
-		}
-		resp, err := messagesGetHistory(cfg, p)
-
-		if err != nil {
-			slog.Error("chat: get new messages", "err", err)
-			continue
-		}
-
-		if len(resp.Items) == 0 {
-			continue
-		}
-
-		last = resp.Items[len(resp.Items)-1]
-
-		for _, msg := range resp.Items {
-			if err := handleMessage(cfg, msg); err != nil {
-				slog.Error("chat: handle", "msg", msg.ID, "err", err)
-			}
-		}
-	}
-}
-
-func listenWall(cfg config) error {
+func listenLongPoll(cfg config) error {
 	server, err := groupsGetLongPollServer(cfg)
 
 	if err != nil {
@@ -59,18 +20,18 @@ func listenWall(cfg config) error {
 		TS: server.TS,
 	}
 
-	slog.Info("wall: listening")
+	slog.Info("long poll: listening")
 
 	for {
 		last, err = groupsUseLongPollServer(cfg, server, last)
 
 		if err != nil {
-			slog.Error("wall: long poll", "err", err)
+			slog.Error("long poll: listen", "err", err)
 			continue
 		}
 
 		if last.Failed != 0 {
-			slog.Debug("wall: long poll refresh")
+			slog.Debug("long poll: refresh")
 
 			server, err = groupsGetLongPollServer(cfg)
 
@@ -79,7 +40,7 @@ func listenWall(cfg config) error {
 					TS: server.TS,
 				}
 			} else {
-				slog.Error("wall: long poll refresh", "err", err)
+				slog.Error("long poll: refresh", "err", err)
 			}
 
 			continue
@@ -87,30 +48,10 @@ func listenWall(cfg config) error {
 
 		for _, upd := range last.Updates {
 			if err := handleUpdate(cfg, upd); err != nil {
-				slog.Error("wall: handle", "type", upd.Type, "err", err)
+				slog.Error("long poll: handle", "type", upd.Type, "err", err)
 			}
 		}
 	}
-}
-
-func handleMessage(cfg config, msg message) error {
-	dg, err := handleEncodedDatagram(msg.Text)
-
-	if err != nil {
-		return err
-	}
-
-	if dg.isZero() {
-		return nil
-	}
-
-	slog.Debug("chat: read", "id", msg.ID, "dg", dg)
-
-	if cfg.Log.Payload {
-		slog.Debug("chat: message", "id", msg.ID, "text", msg.Text, "payload", bytesToHex(dg.payload))
-	}
-
-	return handleDatagram(cfg, dg)
 }
 
 func handleEncodedDatagram(encoded string) (datagram, error) {
