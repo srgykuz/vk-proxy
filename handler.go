@@ -97,11 +97,7 @@ func handleUpdate(cfg config, upd update) error {
 	}
 
 	for _, dg := range datagrams {
-		if cfg.Log.Payload {
-			slog.Debug("handler: update", "type", upd.Type, "dg", dg, "payload", bytesToHex(dg.payload))
-		} else {
-			slog.Debug("handler: update", "type", upd.Type, "dg", dg)
-		}
+		slog.Debug("handler: update", "type", upd.Type, "dg", dg)
 
 		if err := handleDatagram(cfg, dg); err != nil {
 			slog.Error("handler: update", "type", upd.Type, "dg", dg, "err", err)
@@ -188,6 +184,10 @@ func handleDatagram(cfg config, dg datagram) error {
 		}
 
 		setSession(ses.id, ses)
+	}
+
+	if cfg.Log.Payload {
+		slog.Debug("handler: payload", "ses", ses.id, "in", bytesToHex(dg.payload))
 	}
 
 	switch dg.command {
