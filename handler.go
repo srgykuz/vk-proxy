@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sort"
+	"time"
 )
 
 func listenLongPoll(cfg config) error {
@@ -57,20 +58,22 @@ func listenLongPoll(cfg config) error {
 func handleUpdate(cfg config, upd update) error {
 	var encodedS string
 	var encodedB []byte
-	var encodedD []datagram
+	var datagrams []datagram
 	var err error
 
-	if len(upd.Object.Text) > 0 {
+	switch upd.TypeEnum() {
+	case updateTypeMessageReply:
 		encodedS = upd.Object.Text
-	} else if len(upd.Object.Changes.Website.NewValue) > 0 {
-		p := apiDownloadParams{
-			url: upd.Object.Changes.Website.NewValue,
-		}
-		encodedB, err = apiDownload(cfg, p)
-	} else if len(upd.Object.OrigPhoto.URL) > 0 {
-		encodedD, err = handlePhoto(cfg, upd.Object.OrigPhoto.URL)
-	} else {
-		err = fmt.Errorf("unsupported update: %v", upd.Type)
+	case updateTypeWallPostNew:
+		encodedS = upd.Object.Text
+	case updateTypeWallReplyNew:
+		encodedS = upd.Object.Text
+	case updateTypePhotoNew:
+		datagrams, err = handleUpdatePhoto(cfg, upd.Object.OrigPhoto.URL)
+	case updateTypeGroupChangeSettings:
+		encodedB, err = apiDownloadURL(cfg, upd.Object.Changes.Website.NewValue)
+	default:
+		err = errors.New("unsupported update")
 	}
 
 	if err != nil {
@@ -82,46 +85,43 @@ func handleUpdate(cfg config, upd update) error {
 	}
 
 	if len(encodedS) > 0 {
-		dg, err := handleEncodedDatagram(encodedS)
+		dg, err := handleEncoded(encodedS)
 
 		if err != nil {
 			return err
 		}
 
 		if !dg.isZero() {
-			encodedD = append(encodedD, dg)
+			datagrams = append(datagrams, dg)
 		}
 	}
 
-	for _, dg := range encodedD {
-		slog.Debug("wall: update", "type", upd.Type, "dg", dg)
-
+	for _, dg := range datagrams {
 		if cfg.Log.Payload {
-			slog.Debug("wall: update", "type", upd.Type, "encoded", encodedS, "payload", bytesToHex(dg.payload))
+			slog.Debug("handler: update", "type", upd.Type, "dg", dg, "payload", bytesToHex(dg.payload))
+		} else {
+			slog.Debug("handler: update", "type", upd.Type, "dg", dg)
 		}
 
 		if err := handleDatagram(cfg, dg); err != nil {
-			return err
+			slog.Error("handler: update", "type", upd.Type, "dg", dg, "err", err)
 		}
 	}
 
 	return nil
 }
 
-func handlePhoto(cfg config, url string) ([]datagram, error) {
-	p := apiDownloadParams{
-		url: url,
-	}
-	b, err := apiDownload(cfg, p)
+func handleUpdatePhoto(cfg config, url string) ([]datagram, error) {
+	b, err := apiDownloadURL(cfg, url)
 
 	if err != nil {
-		return nil, fmt.Errorf("apiDownload: %v", err)
+		return nil, fmt.Errorf("download url: %v", err)
 	}
 
 	file, err := saveQR(cfg, b, "jpg")
 
 	if err != nil {
-		return nil, fmt.Errorf("saveQR: %v", err)
+		return nil, fmt.Errorf("save qr: %v", err)
 	}
 
 	defer os.Remove(file)
@@ -129,32 +129,32 @@ func handlePhoto(cfg config, url string) ([]datagram, error) {
 	content, err := decodeQR(cfg, file)
 
 	if err != nil {
-		return nil, fmt.Errorf("decodeQR: %v", err)
+		return nil, fmt.Errorf("decode qr: %v", err)
 	}
 
-	dgs := []datagram{}
+	datagrams := []datagram{}
 
 	for _, s := range content {
-		dg, err := handleEncodedDatagram(s)
+		dg, err := handleEncoded(s)
 
 		if err != nil {
-			return nil, fmt.Errorf("handleEncodedDatagram: %v", err)
+			return nil, err
 		}
 
 		if !dg.isZero() {
-			dgs = append(dgs, dg)
+			datagrams = append(datagrams, dg)
 		}
 	}
 
-	sort.Slice(dgs, func(i, j int) bool {
-		return dgs[i].number < dgs[j].number
+	sort.Slice(datagrams, func(i, j int) bool {
+		return datagrams[i].number < datagrams[j].number
 	})
 
-	return dgs, nil
+	return datagrams, nil
 }
 
-func handleEncodedDatagram(encoded string) (datagram, error) {
-	dg, err := decodeDatagram(encoded)
+func handleEncoded(s string) (datagram, error) {
+	dg, err := decodeDatagram(s)
 
 	if err != nil {
 		return datagram{}, fmt.Errorf("decode datagram: %v", err)
@@ -172,7 +172,7 @@ func handleDatagram(cfg config, dg datagram) error {
 
 	if exists && dg.command == commandConnect {
 		if ses.opened() {
-			return fmt.Errorf("bidirectional proxying over opened session: %v", dg)
+			return errors.New("bidirectional proxying over opened session")
 		}
 
 		exists = false
@@ -190,8 +190,6 @@ func handleDatagram(cfg config, dg datagram) error {
 		setSession(ses.id, ses)
 	}
 
-	slog.Debug("handler: handle", "ses", ses.id, "dg", dg)
-
 	switch dg.command {
 	case commandConnect:
 		err = handleCommandConnect(cfg, ses, dg)
@@ -204,7 +202,7 @@ func handleDatagram(cfg config, dg datagram) error {
 	case commandClose:
 		handleCommandClose(ses, false)
 	default:
-		err = errors.New("unknown")
+		err = errors.New("unsupported")
 	}
 
 	if err != nil {
@@ -226,7 +224,8 @@ func handleCommandConnect(cfg config, ses *session, dg datagram) error {
 	}
 
 	addr := address(pld).String()
-	conn, err := net.Dial("tcp", addr)
+	timeout := 10 * time.Second
+	conn, err := net.DialTimeout("tcp", addr, timeout)
 
 	if err != nil {
 		return err
@@ -248,16 +247,21 @@ func handleCommandForward(ses *session, dg datagram) error {
 		return err
 	}
 
-	err := ses.write(dg.payload)
+	if err := ses.write(dg.payload); err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
 
 func handleCommandClose(ses *session, notify bool) {
 	if notify {
 		num := ses.nextNumber()
 		dg := newDatagram(ses.id, num, commandClose, nil)
-		ses.message(dg)
+
+		if err := ses.message(dg); err != nil {
+			slog.Error("handler: command close: notify", "ses", ses.id, "err", err)
+		}
 	}
 
 	ses.close()

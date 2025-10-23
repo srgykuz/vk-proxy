@@ -106,6 +106,14 @@ func apiDownload(cfg config, params apiDownloadParams) ([]byte, error) {
 	return data, nil
 }
 
+func apiDownloadURL(cfg config, uri string) ([]byte, error) {
+	p := apiDownloadParams{
+		url: uri,
+	}
+
+	return apiDownload(cfg, p)
+}
+
 type errorResult struct {
 	ErrorCode int    `json:"error_code"`
 	ErrorMsg  string `json:"error_msg"`
@@ -291,12 +299,37 @@ type groupsUseLongPollServerResponse struct {
 	Updates []update    `json:"updates"`
 }
 
+const (
+	updateTypeMessageReply int = iota + 1
+	updateTypeWallPostNew
+	updateTypeWallReplyNew
+	updateTypePhotoNew
+	updateTypeGroupChangeSettings
+)
+
 type update struct {
 	Type    string       `json:"type"`
 	EventID string       `json:"event_id"`
 	V       string       `json:"v"`
 	GroupID int          `json:"group_id"`
 	Object  updateObject `json:"object"`
+}
+
+func (u update) TypeEnum() int {
+	switch u.Type {
+	case "message_reply":
+		return updateTypeMessageReply
+	case "wall_post_new":
+		return updateTypeWallPostNew
+	case "wall_reply_new":
+		return updateTypeWallReplyNew
+	case "photo_new":
+		return updateTypePhotoNew
+	case "group_change_settings":
+		return updateTypeGroupChangeSettings
+	default:
+		return 0
+	}
 }
 
 type updateObject struct {
