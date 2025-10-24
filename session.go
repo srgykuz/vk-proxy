@@ -74,7 +74,8 @@ type session struct {
 	wg        sync.WaitGroup
 	number    int32
 	peer      net.Conn
-	closed    bool
+	isClosed  bool
+	closed    chan struct{}
 	writes    chan []byte
 	messages  chan string
 	forwards  chan []byte
@@ -92,7 +93,8 @@ func openSession(id int32, cfg config) (*session, error) {
 		wg:        sync.WaitGroup{},
 		number:    0,
 		peer:      nil,
-		closed:    false,
+		isClosed:  false,
+		closed:    make(chan struct{}),
 		writes:    make(chan []byte, 500),
 		messages:  make(chan string, 500),
 		forwards:  make(chan []byte, 500),
@@ -126,7 +128,7 @@ func (s *session) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
+	if s.isClosed {
 		return
 	}
 
@@ -151,14 +153,15 @@ func (s *session) close() {
 		s.peer.Close()
 	}
 
-	s.closed = true
+	close(s.closed)
+	s.isClosed = true
 }
 
 func (s *session) opened() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return !s.closed
+	return !s.isClosed
 }
 
 func (s *session) write(b []byte) error {
@@ -168,7 +171,7 @@ func (s *session) write(b []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
+	if s.isClosed {
 		return errSessionClosed
 	}
 
@@ -198,7 +201,7 @@ func (s *session) message(dg datagram) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
+	if s.isClosed {
 		return errSessionClosed
 	}
 
@@ -242,7 +245,7 @@ func (s *session) forward(pld []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
+	if s.isClosed {
 		return errSessionClosed
 	}
 
@@ -303,7 +306,7 @@ func (s *session) signal(sig int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
+	if s.isClosed {
 		return errSessionClosed
 	}
 
@@ -327,7 +330,7 @@ func (s *session) signal(sig int) error {
 func (s *session) waitSignal(sig int) error {
 	s.mu.Lock()
 
-	if s.closed {
+	if s.isClosed {
 		s.mu.Unlock()
 		return errSessionClosed
 	}
