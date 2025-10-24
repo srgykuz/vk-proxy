@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -48,9 +49,11 @@ func listenLongPoll(cfg config) error {
 		}
 
 		for _, upd := range last.Updates {
-			if err := handleUpdate(cfg, upd); err != nil {
-				slog.Error("long poll: handle", "type", upd.Type, "err", err)
-			}
+			go func() {
+				if err := handleUpdate(cfg, upd); err != nil {
+					slog.Error("handler: update", "type", upd.Type, "err", err)
+				}
+			}()
 		}
 	}
 }
@@ -163,7 +166,13 @@ func handleEncoded(s string) (datagram, error) {
 	return dg, nil
 }
 
+var handleDatagramMu *sync.Mutex = &sync.Mutex{}
+var handleDatagramQueues map[int32]*handlerPriorityQueue = map[int32]*handlerPriorityQueue{}
+
 func handleDatagram(cfg config, dg datagram) error {
+	handleDatagramMu.Lock()
+	defer handleDatagramMu.Unlock()
+
 	ses, exists := getSession(dg.session)
 
 	if exists && dg.command == commandConnect {
@@ -174,9 +183,8 @@ func handleDatagram(cfg config, dg datagram) error {
 		exists = false
 	}
 
-	var err error
-
 	if !exists {
+		var err error
 		ses, err = openSession(dg.session, cfg)
 
 		if err != nil {
@@ -184,11 +192,29 @@ func handleDatagram(cfg config, dg datagram) error {
 		}
 
 		setSession(ses.id, ses)
+		delete(handleDatagramQueues, ses.id)
 	}
+
+	queue, exists := handleDatagramQueues[ses.id]
+
+	if !exists {
+		queue = newHandlerPriorityQueue(cfg, ses)
+		handleDatagramQueues[ses.id] = queue
+	}
+
+	queue.add(dg)
+
+	return nil
+}
+
+func handleCommand(cfg config, ses *session, dg datagram) error {
+	slog.Debug("handler: command", "dg", dg)
 
 	if cfg.Log.Payload {
 		slog.Debug("handler: payload", "ses", ses.id, "in", bytesToHex(dg.payload))
 	}
+
+	var err error
 
 	switch dg.command {
 	case commandConnect:
@@ -265,4 +291,118 @@ func handleCommandClose(ses *session, notify bool) {
 	}
 
 	ses.close()
+}
+
+type handlerPriorityQueue struct {
+	cfg    config
+	ses    *session
+	mu     sync.Mutex
+	temp   []datagram
+	data   map[int32]datagram
+	next   int32
+	signal chan struct{}
+	stop   chan struct{}
+}
+
+func newHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
+	q := &handlerPriorityQueue{
+		cfg:    cfg,
+		ses:    ses,
+		mu:     sync.Mutex{},
+		temp:   []datagram{},
+		data:   map[int32]datagram{},
+		next:   1,
+		signal: make(chan struct{}, 1),
+		stop:   make(chan struct{}),
+	}
+
+	go func() {
+		q.handle()
+		q.clear()
+	}()
+
+	return q
+}
+
+func (q *handlerPriorityQueue) add(dg datagram) {
+	q.mu.Lock()
+	q.temp = append(q.temp, dg)
+	q.mu.Unlock()
+
+	select {
+	case q.signal <- struct{}{}:
+	default:
+	}
+}
+
+func (q *handlerPriorityQueue) handle() {
+	slog.Debug("handler: queue start", "ses", q.ses.id)
+	defer slog.Debug("handler: queue stop", "ses", q.ses.id)
+
+	for {
+		select {
+		case <-q.signal:
+			q.process()
+		case <-q.stop:
+			return
+		case <-q.ses.closed:
+			return
+		}
+	}
+}
+
+func (q *handlerPriorityQueue) process() {
+	q.mu.Lock()
+
+	for _, dg := range q.temp {
+		q.data[dg.number] = dg
+	}
+
+	q.temp = []datagram{}
+
+	q.mu.Unlock()
+
+	for {
+		dg, exists := q.data[q.next]
+
+		if !exists {
+			break
+		}
+
+		if err := handleCommand(q.cfg, q.ses, dg); err != nil {
+			slog.Error("handler: command", "dg", dg, "err", err)
+			close(q.stop)
+			break
+		}
+
+		q.next++
+	}
+}
+
+func (q *handlerPriorityQueue) clear() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	clear(q.temp)
+	clear(q.data)
+}
+
+func clearHandler() error {
+	interval := 5 * time.Minute
+
+	for {
+		time.Sleep(interval)
+
+		handleDatagramMu.Lock()
+
+		for key, queue := range handleDatagramQueues {
+			if queue.ses.opened() {
+				continue
+			}
+
+			delete(handleDatagramQueues, key)
+		}
+
+		handleDatagramMu.Unlock()
+	}
 }
