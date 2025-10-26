@@ -167,7 +167,7 @@ func handleEncoded(s string) (datagram, error) {
 }
 
 var handleDatagramMu *sync.Mutex = &sync.Mutex{}
-var handleDatagramQueues map[int32]*handlerPriorityQueue = map[int32]*handlerPriorityQueue{}
+var handleDatagramQueues map[dgSes]*handlerPriorityQueue = map[dgSes]*handlerPriorityQueue{}
 
 func handleDatagram(cfg config, dg datagram) error {
 	handleDatagramMu.Lock()
@@ -323,9 +323,9 @@ type handlerPriorityQueue struct {
 	mu      sync.Mutex
 	closed  bool
 	temp    []datagram
-	data    map[int32]datagram
-	next    int32
-	pending int32
+	data    map[dgNum]datagram
+	next    dgNum
+	pending dgNum
 	retries int
 	signal  chan struct{}
 	stop    chan struct{}
@@ -340,7 +340,7 @@ func openHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
 		mu:      sync.Mutex{},
 		closed:  false,
 		temp:    []datagram{},
-		data:    map[int32]datagram{},
+		data:    map[dgNum]datagram{},
 		next:    1,
 		pending: 0,
 		retries: 0,

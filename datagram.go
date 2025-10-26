@@ -9,8 +9,17 @@ import (
 	"time"
 )
 
+type (
+	dgVer uint16
+	dgSum uint32
+	dgDev int64
+	dgSes int32
+	dgNum int32
+	dgCmd int16
+)
+
 const (
-	commandConnect int16 = iota + 1
+	commandConnect dgCmd = iota + 1
 	commandForward
 	commandClose
 	commandRetry
@@ -20,15 +29,15 @@ var (
 	errDatagramMalformed = errors.New("datagram is malformed")
 )
 
-var deviceID = time.Now().UnixMilli()
+var deviceID = dgDev(time.Now().UnixMilli())
 
 type datagram struct {
-	version  uint16
-	checksum uint32
-	device   int64
-	session  int32
-	number   int32
-	command  int16
+	version  dgVer
+	checksum dgSum
+	device   dgDev
+	session  dgSes
+	number   dgNum
+	command  dgCmd
 	payload  []byte
 }
 
@@ -58,7 +67,7 @@ func (dg datagram) clone() datagram {
 	return dg
 }
 
-func newDatagram(ses int32, num int32, cmd int16, pld []byte) datagram {
+func newDatagram(ses dgSes, num dgNum, cmd dgCmd, pld []byte) datagram {
 	return datagram{
 		version:  1,
 		checksum: 0,
@@ -73,8 +82,8 @@ func newDatagram(ses int32, num int32, cmd int16, pld []byte) datagram {
 func encodeDatagram(dg datagram) string {
 	data := make([]byte, 0, 24+len(dg.payload))
 
-	data = binary.BigEndian.AppendUint16(data, dg.version)
-	data = binary.BigEndian.AppendUint32(data, dg.checksum)
+	data = binary.BigEndian.AppendUint16(data, uint16(dg.version))
+	data = binary.BigEndian.AppendUint32(data, uint32(dg.checksum))
 	data = binary.BigEndian.AppendUint64(data, uint64(dg.device))
 	data = binary.BigEndian.AppendUint32(data, uint32(dg.session))
 	data = binary.BigEndian.AppendUint32(data, uint32(dg.number))
@@ -102,10 +111,10 @@ func decodeDatagram(s string) (datagram, error) {
 
 	ver := binary.BigEndian.Uint16(data[0:2])
 	sum := binary.BigEndian.Uint32(data[2:6])
-	dev := int64(binary.BigEndian.Uint64(data[6:14]))
-	ses := int32(binary.BigEndian.Uint32(data[14:18]))
-	num := int32(binary.BigEndian.Uint32(data[18:22]))
-	cmd := int16(binary.BigEndian.Uint16(data[22:24]))
+	dev := binary.BigEndian.Uint64(data[6:14])
+	ses := binary.BigEndian.Uint32(data[14:18])
+	num := binary.BigEndian.Uint32(data[18:22])
+	cmd := binary.BigEndian.Uint16(data[22:24])
 	pld := data[24:]
 
 	binary.BigEndian.PutUint32(data[2:6], 0)
@@ -116,12 +125,12 @@ func decodeDatagram(s string) (datagram, error) {
 	}
 
 	dg := datagram{
-		version:  ver,
-		checksum: sum,
-		device:   dev,
-		session:  ses,
-		number:   num,
-		command:  cmd,
+		version:  dgVer(ver),
+		checksum: dgSum(sum),
+		device:   dgDev(dev),
+		session:  dgSes(ses),
+		number:   dgNum(num),
+		command:  dgCmd(cmd),
 		payload:  pld,
 	}
 
@@ -152,7 +161,7 @@ func (pld *payloadConnect) decode(data []byte) error {
 }
 
 type payloadRetry struct {
-	number int32
+	number dgNum
 }
 
 func (pld *payloadRetry) encode() []byte {
@@ -168,7 +177,7 @@ func (pld *payloadRetry) decode(data []byte) error {
 		return errDatagramMalformed
 	}
 
-	pld.number = int32(binary.BigEndian.Uint32(data))
+	pld.number = dgNum(binary.BigEndian.Uint32(data))
 
 	return nil
 }

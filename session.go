@@ -17,10 +17,10 @@ var (
 	errSessionClosed = errors.New("session is closed")
 )
 
-var sessions map[int32]*session = map[int32]*session{}
+var sessions map[dgSes]*session = map[dgSes]*session{}
 var sessionsMu sync.Mutex
 
-func getSession(id int32) (*session, bool) {
+func getSession(id dgSes) (*session, bool) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
 
@@ -29,7 +29,7 @@ func getSession(id int32) (*session, bool) {
 	return ses, exists
 }
 
-func setSession(id int32, ses *session) {
+func setSession(id dgSes, ses *session) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
 
@@ -56,10 +56,10 @@ func clearSessions(cfg config) error {
 	}
 }
 
-var sessionID int32 = 0
+var sessionID dgSes = 0
 var sessionIDMu sync.Mutex
 
-func nextSessionID() int32 {
+func nextSessionID() dgSes {
 	sessionIDMu.Lock()
 	defer sessionIDMu.Unlock()
 
@@ -69,10 +69,10 @@ func nextSessionID() int32 {
 }
 
 type session struct {
-	id        int32
+	id        dgSes
 	mu        sync.Mutex
 	wg        sync.WaitGroup
-	number    int32
+	number    dgNum
 	peer      net.Conn
 	isClosed  bool
 	closed    chan struct{}
@@ -82,10 +82,10 @@ type session struct {
 	sigConn   chan struct{}
 	sigConnCl bool
 	postID    int
-	history   map[int32]datagram
+	history   map[dgNum]datagram
 }
 
-func openSession(id int32, cfg config) (*session, error) {
+func openSession(id dgSes, cfg config) (*session, error) {
 	slog.Debug("session: open", "id", id)
 
 	s := &session{
@@ -102,7 +102,7 @@ func openSession(id int32, cfg config) (*session, error) {
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
 		postID:    0,
-		history:   make(map[int32]datagram),
+		history:   make(map[dgNum]datagram),
 	}
 
 	s.wg.Add(1)
@@ -356,7 +356,7 @@ func (s *session) waitSignal(sig int) error {
 	return nil
 }
 
-func (s *session) nextNumber() int32 {
+func (s *session) nextNumber() dgNum {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -372,7 +372,7 @@ func (s *session) setPeer(conn net.Conn) {
 	s.peer = conn
 }
 
-func (s *session) getHistory(number int32) (datagram, bool) {
+func (s *session) getHistory(number dgNum) (datagram, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
