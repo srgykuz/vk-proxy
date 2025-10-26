@@ -198,11 +198,13 @@ func handleDatagram(cfg config, dg datagram) error {
 	queue, exists := handleDatagramQueues[ses.id]
 
 	if !exists {
-		queue = newHandlerPriorityQueue(cfg, ses)
+		queue = openHandlerPriorityQueue(cfg, ses)
 		handleDatagramQueues[ses.id] = queue
 	}
 
-	queue.add(dg)
+	if err := queue.add(dg); err != nil {
+		return fmt.Errorf("add in queue: %v", err)
+	}
 
 	return nil
 }
@@ -288,7 +290,7 @@ func handleCommandClose(ses *session, notify bool) {
 		dg := newDatagram(ses.id, num, commandClose, nil)
 
 		if err := ses.message(dg); err != nil {
-			slog.Error("handler: command close: notify", "ses", ses.id, "err", err)
+			slog.Error("handler: notify on close", "ses", ses.id, "err", err)
 		}
 	}
 
@@ -319,6 +321,7 @@ type handlerPriorityQueue struct {
 	cfg     config
 	ses     *session
 	mu      sync.Mutex
+	closed  bool
 	temp    []datagram
 	data    map[int32]datagram
 	next    int32
@@ -328,11 +331,14 @@ type handlerPriorityQueue struct {
 	stop    chan struct{}
 }
 
-func newHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
+func openHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
+	slog.Debug("handler: queue open", "ses", ses.id)
+
 	q := &handlerPriorityQueue{
 		cfg:     cfg,
 		ses:     ses,
 		mu:      sync.Mutex{},
+		closed:  false,
 		temp:    []datagram{},
 		data:    map[int32]datagram{},
 		next:    1,
@@ -343,39 +349,62 @@ func newHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
 	}
 
 	go func() {
-		q.handle()
-		q.clear()
+		q.listen()
+		q.close()
 	}()
 
 	return q
 }
 
-func (q *handlerPriorityQueue) add(dg datagram) {
+func (q *handlerPriorityQueue) close() {
+	slog.Debug("handler: queue close", "ses", q.ses.id)
+
 	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	clear(q.temp)
+	clear(q.data)
+
+	q.closed = true
+}
+
+func (q *handlerPriorityQueue) isClosed() bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	return q.closed
+}
+
+func (q *handlerPriorityQueue) add(dg datagram) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if q.closed {
+		return errors.New("queue is closed")
+	}
+
 	q.temp = append(q.temp, dg)
-	q.mu.Unlock()
 
 	select {
 	case q.signal <- struct{}{}:
 	default:
 	}
+
+	return nil
 }
 
-func (q *handlerPriorityQueue) handle() {
-	slog.Debug("handler: queue start", "ses", q.ses.id)
-	defer slog.Debug("handler: queue stop", "ses", q.ses.id)
-
+func (q *handlerPriorityQueue) listen() {
 	retryInterval := 5 * time.Second
 
 	for {
 		select {
 		case <-q.signal:
-			q.process()
+			q.handle()
 		case <-time.After(retryInterval):
 			giveup := q.retry()
 
 			if giveup {
-				handleCommandClose(q.ses, false)
+				handleCommandClose(q.ses, true)
 			}
 		case <-q.stop:
 			return
@@ -385,7 +414,7 @@ func (q *handlerPriorityQueue) handle() {
 	}
 }
 
-func (q *handlerPriorityQueue) process() {
+func (q *handlerPriorityQueue) handle() {
 	q.mu.Lock()
 
 	for _, dg := range q.temp {
@@ -415,22 +444,20 @@ func (q *handlerPriorityQueue) process() {
 
 func (q *handlerPriorityQueue) retry() bool {
 	q.mu.Lock()
+	defer q.mu.Unlock()
 
 	if _, exists := q.data[q.next]; exists {
-		q.mu.Unlock()
 		return false
 	}
 
 	for _, dg := range q.temp {
 		if dg.number == q.next {
-			q.mu.Unlock()
 			return false
 		}
 	}
 
 	if q.next == q.pending {
 		if q.retries >= 3 {
-			q.mu.Unlock()
 			return true
 		}
 
@@ -443,9 +470,6 @@ func (q *handlerPriorityQueue) retry() bool {
 	payload := payloadRetry{
 		number: q.next,
 	}
-
-	q.mu.Unlock()
-
 	num := q.ses.nextNumber()
 	pld := payload.encode()
 	dg := newDatagram(q.ses.id, num, commandRetry, pld)
@@ -457,14 +481,6 @@ func (q *handlerPriorityQueue) retry() bool {
 	return false
 }
 
-func (q *handlerPriorityQueue) clear() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	clear(q.temp)
-	clear(q.data)
-}
-
 func clearHandler() error {
 	interval := 5 * time.Minute
 
@@ -474,11 +490,9 @@ func clearHandler() error {
 		handleDatagramMu.Lock()
 
 		for key, queue := range handleDatagramQueues {
-			if queue.ses.opened() {
-				continue
+			if queue.isClosed() {
+				delete(handleDatagramQueues, key)
 			}
-
-			delete(handleDatagramQueues, key)
 		}
 
 		handleDatagramMu.Unlock()
