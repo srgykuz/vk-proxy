@@ -227,6 +227,8 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 		err = handleCommandForward(ses, dg)
 	case commandClose:
 		handleCommandClose(ses, false)
+	case commandRetry:
+		err = handleCommandRetry(ses, dg)
 	default:
 		err = errors.New("unsupported")
 	}
@@ -293,27 +295,51 @@ func handleCommandClose(ses *session, notify bool) {
 	ses.close()
 }
 
+func handleCommandRetry(ses *session, dg datagram) error {
+	pld := payloadRetry{}
+
+	if err := pld.decode(dg.payload); err != nil {
+		return err
+	}
+
+	dg, exists := ses.getHistory(pld.number)
+
+	if exists {
+		if err := ses.message(dg); err != nil {
+			return err
+		}
+	} else {
+		slog.Debug("handler: history miss", "ses", ses.id, "number", pld.number)
+	}
+
+	return nil
+}
+
 type handlerPriorityQueue struct {
-	cfg    config
-	ses    *session
-	mu     sync.Mutex
-	temp   []datagram
-	data   map[int32]datagram
-	next   int32
-	signal chan struct{}
-	stop   chan struct{}
+	cfg     config
+	ses     *session
+	mu      sync.Mutex
+	temp    []datagram
+	data    map[int32]datagram
+	next    int32
+	pending int32
+	retries int
+	signal  chan struct{}
+	stop    chan struct{}
 }
 
 func newHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
 	q := &handlerPriorityQueue{
-		cfg:    cfg,
-		ses:    ses,
-		mu:     sync.Mutex{},
-		temp:   []datagram{},
-		data:   map[int32]datagram{},
-		next:   1,
-		signal: make(chan struct{}, 1),
-		stop:   make(chan struct{}),
+		cfg:     cfg,
+		ses:     ses,
+		mu:      sync.Mutex{},
+		temp:    []datagram{},
+		data:    map[int32]datagram{},
+		next:    1,
+		pending: 0,
+		retries: 0,
+		signal:  make(chan struct{}, 1),
+		stop:    make(chan struct{}),
 	}
 
 	go func() {
@@ -339,10 +365,18 @@ func (q *handlerPriorityQueue) handle() {
 	slog.Debug("handler: queue start", "ses", q.ses.id)
 	defer slog.Debug("handler: queue stop", "ses", q.ses.id)
 
+	retryInterval := 5 * time.Second
+
 	for {
 		select {
 		case <-q.signal:
 			q.process()
+		case <-time.After(retryInterval):
+			giveup := q.retry()
+
+			if giveup {
+				handleCommandClose(q.ses, false)
+			}
 		case <-q.stop:
 			return
 		case <-q.ses.closed:
@@ -377,6 +411,50 @@ func (q *handlerPriorityQueue) process() {
 
 		q.next++
 	}
+}
+
+func (q *handlerPriorityQueue) retry() bool {
+	q.mu.Lock()
+
+	if _, exists := q.data[q.next]; exists {
+		q.mu.Unlock()
+		return false
+	}
+
+	for _, dg := range q.temp {
+		if dg.number == q.next {
+			q.mu.Unlock()
+			return false
+		}
+	}
+
+	if q.next == q.pending {
+		if q.retries >= 3 {
+			q.mu.Unlock()
+			return true
+		}
+
+		q.retries++
+	} else {
+		q.pending = q.next
+		q.retries = 1
+	}
+
+	payload := payloadRetry{
+		number: q.next,
+	}
+
+	q.mu.Unlock()
+
+	num := q.ses.nextNumber()
+	pld := payload.encode()
+	dg := newDatagram(q.ses.id, num, commandRetry, pld)
+
+	if err := q.ses.message(dg); err != nil {
+		slog.Error("handler: retry", "ses", q.ses.id, "err", err)
+	}
+
+	return false
 }
 
 func (q *handlerPriorityQueue) clear() {

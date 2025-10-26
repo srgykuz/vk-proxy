@@ -82,6 +82,7 @@ type session struct {
 	sigConn   chan struct{}
 	sigConnCl bool
 	postID    int
+	history   map[int32]datagram
 }
 
 func openSession(id int32, cfg config) (*session, error) {
@@ -101,6 +102,7 @@ func openSession(id int32, cfg config) (*session, error) {
 		sigConn:   make(chan struct{}),
 		sigConnCl: false,
 		postID:    0,
+		history:   make(map[int32]datagram),
 	}
 
 	s.wg.Add(1)
@@ -207,6 +209,8 @@ func (s *session) message(dg datagram) error {
 
 	slog.Debug("session: message", "id", s.id, "dg", dg)
 
+	s.history[dg.number] = dg
+
 	select {
 	case s.messages <- msg:
 		return nil
@@ -266,6 +270,11 @@ func (s *session) handleForwards(cfg config) {
 		for _, chunk := range chunks {
 			num := s.nextNumber()
 			dg := newDatagram(s.id, num, commandForward, chunk)
+
+			s.mu.Lock()
+			s.history[dg.number] = dg
+			s.mu.Unlock()
+
 			content := encodeDatagram(dg)
 
 			slog.Debug("session: forward", "id", s.id, "dg", dg)
@@ -361,4 +370,13 @@ func (s *session) setPeer(conn net.Conn) {
 	defer s.mu.Unlock()
 
 	s.peer = conn
+}
+
+func (s *session) getHistory(number int32) (datagram, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dg, exists := s.history[number]
+
+	return dg, exists
 }

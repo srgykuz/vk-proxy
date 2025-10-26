@@ -13,6 +13,7 @@ const (
 	commandConnect int16 = iota + 1
 	commandForward
 	commandClose
+	commandRetry
 )
 
 var (
@@ -146,6 +147,28 @@ func (pld *payloadConnect) decode(data []byte) error {
 
 	pld.host = string(data[:len(data)-2])
 	pld.port = binary.BigEndian.Uint16(data[len(data)-2:])
+
+	return nil
+}
+
+type payloadRetry struct {
+	number int32
+}
+
+func (pld *payloadRetry) encode() []byte {
+	data := make([]byte, 4)
+
+	binary.BigEndian.PutUint32(data, uint32(pld.number))
+
+	return data
+}
+
+func (pld *payloadRetry) decode(data []byte) error {
+	if len(data) < 4 {
+		return errDatagramMalformed
+	}
+
+	pld.number = int32(binary.BigEndian.Uint32(data))
 
 	return nil
 }
