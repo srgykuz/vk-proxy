@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -44,9 +45,12 @@ func encodeQR(cfg config, content string) ([]byte, error) {
 }
 
 func decodeQR(cfg config, file string) ([]string, error) {
-	buf := bytes.Buffer{}
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.QR.ZBarTimeout())
+	defer cancel()
 
-	cmd := exec.Command(cfg.QR.ZBarPath, file)
+	buf := bytes.Buffer{}
+	cmd := exec.CommandContext(ctx, cfg.QR.ZBarPath, file)
+
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 
