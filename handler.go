@@ -228,7 +228,7 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 	case commandForward:
 		err = handleCommandForward(ses, dg)
 	case commandClose:
-		handleCommandClose(ses, false)
+		handleCommandClose(ses)
 	case commandRetry:
 		err = handleCommandRetry(ses, dg)
 	default:
@@ -236,10 +236,6 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 	}
 
 	if err != nil {
-		if dg.command != commandClose {
-			handleCommandClose(ses, true)
-		}
-
 		return fmt.Errorf("command %v: %v", dg.command, err)
 	}
 
@@ -284,16 +280,7 @@ func handleCommandForward(ses *session, dg datagram) error {
 	return nil
 }
 
-func handleCommandClose(ses *session, notify bool) {
-	if notify {
-		num := ses.nextNumber()
-		dg := newDatagram(ses.id, num, commandClose, nil)
-
-		if err := ses.message(dg); err != nil {
-			slog.Error("handler: notify on close", "ses", ses.id, "err", err)
-		}
-	}
-
+func handleCommandClose(ses *session) {
 	ses.close()
 }
 
@@ -404,7 +391,8 @@ func (q *handlerPriorityQueue) listen() {
 			giveup := q.retry()
 
 			if giveup {
-				handleCommandClose(q.ses, true)
+				q.send(commandClose, nil)
+				handleCommandClose(q.ses)
 			}
 		case <-q.stop:
 			return
@@ -434,6 +422,12 @@ func (q *handlerPriorityQueue) handle() {
 
 		if err := handleCommand(q.cfg, q.ses, dg); err != nil {
 			slog.Error("handler: command", "dg", dg, "err", err)
+
+			if dg.command != commandClose {
+				q.send(commandClose, nil)
+				handleCommandClose(q.ses)
+			}
+
 			close(q.stop)
 			break
 		}
@@ -467,18 +461,21 @@ func (q *handlerPriorityQueue) retry() bool {
 		q.retries = 1
 	}
 
-	payload := payloadRetry{
+	pld := payloadRetry{
 		number: q.next,
 	}
-	num := q.ses.nextNumber()
-	pld := payload.encode()
-	dg := newDatagram(q.ses.id, num, commandRetry, pld)
-
-	if err := q.ses.message(dg); err != nil {
-		slog.Error("handler: retry", "ses", q.ses.id, "err", err)
-	}
+	q.send(commandRetry, pld.encode())
 
 	return false
+}
+
+func (q *handlerPriorityQueue) send(cmd dgCmd, pld []byte) {
+	num := q.ses.nextNumber()
+	dg := newDatagram(q.ses.id, num, cmd, pld)
+
+	if err := q.ses.message(dg); err != nil {
+		slog.Error("handler: send", "ses", q.ses.id, "cmd", cmd, "err", err)
+	}
 }
 
 func clearHandler() error {
