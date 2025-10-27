@@ -253,18 +253,10 @@ func handleCommandConnect(cfg config, ses *session, dg datagram) error {
 
 	go acceptSocks(cfg, ses, stageForward)
 
-	if err := ses.signal(signalConnected); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func handleCommandForward(ses *session, dg datagram) error {
-	if err := ses.waitSignal(signalConnected); err != nil {
-		return err
-	}
-
 	if err := ses.write(dg.payload); err != nil {
 		return err
 	}

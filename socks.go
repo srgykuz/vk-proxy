@@ -335,10 +335,6 @@ func handleSocksStageConnectSession(ses *session, addr address) error {
 		return err
 	}
 
-	if err := ses.signal(signalConnected); err != nil {
-		return err
-	}
-
 	return nil
 }
 

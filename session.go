@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-const (
-	signalConnected int = iota + 1
-)
-
 var (
 	errSessionClosed = errors.New("session is closed")
 )
@@ -69,40 +65,36 @@ func nextSessionID() dgSes {
 }
 
 type session struct {
-	id        dgSes
-	mu        sync.Mutex
-	wg        sync.WaitGroup
-	number    dgNum
-	peer      net.Conn
-	isClosed  bool
-	closed    chan struct{}
-	writes    chan []byte
-	messages  chan string
-	forwards  chan []byte
-	sigConn   chan struct{}
-	sigConnCl bool
-	postID    int
-	history   map[dgNum]datagram
+	id       dgSes
+	mu       sync.Mutex
+	wg       sync.WaitGroup
+	number   dgNum
+	peer     net.Conn
+	isClosed bool
+	closed   chan struct{}
+	writes   chan []byte
+	messages chan string
+	forwards chan []byte
+	postID   int
+	history  map[dgNum]datagram
 }
 
 func openSession(id dgSes, cfg config) (*session, error) {
 	slog.Debug("session: open", "id", id)
 
 	s := &session{
-		id:        id,
-		mu:        sync.Mutex{},
-		wg:        sync.WaitGroup{},
-		number:    0,
-		peer:      nil,
-		isClosed:  false,
-		closed:    make(chan struct{}),
-		writes:    make(chan []byte, 500),
-		messages:  make(chan string, 500),
-		forwards:  make(chan []byte, 500),
-		sigConn:   make(chan struct{}),
-		sigConnCl: false,
-		postID:    0,
-		history:   make(map[dgNum]datagram),
+		id:       id,
+		mu:       sync.Mutex{},
+		wg:       sync.WaitGroup{},
+		number:   0,
+		peer:     nil,
+		isClosed: false,
+		closed:   make(chan struct{}),
+		writes:   make(chan []byte, 500),
+		messages: make(chan string, 500),
+		forwards: make(chan []byte, 500),
+		postID:   0,
+		history:  make(map[dgNum]datagram),
 	}
 
 	s.wg.Add(1)
@@ -138,11 +130,6 @@ func (s *session) close() {
 		slog.Debug("session: close", "id", s.id)
 	} else {
 		slog.Debug("session: close", "id", s.id, "peer", s.peer.RemoteAddr().String())
-	}
-
-	if !s.sigConnCl {
-		close(s.sigConn)
-		s.sigConnCl = true
 	}
 
 	close(s.writes)
@@ -309,51 +296,6 @@ func (s *session) handleForwards(cfg config) {
 
 		time.Sleep(interval)
 	}
-}
-
-func (s *session) signal(sig int) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.isClosed {
-		return errSessionClosed
-	}
-
-	slog.Debug("session: signal", "id", s.id, "sig", sig)
-
-	switch sig {
-	case signalConnected:
-		if s.sigConnCl {
-			return errors.New("signalConnected already done")
-		} else {
-			close(s.sigConn)
-			s.sigConnCl = true
-		}
-	default:
-		return fmt.Errorf("signal: unknown signal: %v", sig)
-	}
-
-	return nil
-}
-
-func (s *session) waitSignal(sig int) error {
-	s.mu.Lock()
-
-	if s.isClosed {
-		s.mu.Unlock()
-		return errSessionClosed
-	}
-
-	s.mu.Unlock()
-
-	switch sig {
-	case signalConnected:
-		<-s.sigConn
-	default:
-		return fmt.Errorf("wait signal: unknown signal: %v", sig)
-	}
-
-	return nil
 }
 
 func (s *session) nextNumber() dgNum {
