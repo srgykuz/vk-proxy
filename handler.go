@@ -379,7 +379,7 @@ func (q *handlerPriorityQueue) add(dg datagram) error {
 }
 
 func (q *handlerPriorityQueue) listen() {
-	retryInterval := 5 * time.Second
+	retryInterval := 10 * time.Second
 
 	for {
 		stop := false
