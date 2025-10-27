@@ -203,7 +203,7 @@ func handleDatagram(cfg config, dg datagram) error {
 	}
 
 	if err := queue.add(dg); err != nil {
-		return fmt.Errorf("add in queue: %v", err)
+		return fmt.Errorf("queue add: %v", err)
 	}
 
 	return nil
@@ -315,7 +315,6 @@ type handlerPriorityQueue struct {
 	pending dgNum
 	retries int
 	signal  chan struct{}
-	stop    chan struct{}
 }
 
 func openHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
@@ -332,7 +331,6 @@ func openHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
 		pending: 0,
 		retries: 0,
 		signal:  make(chan struct{}, 1),
-		stop:    make(chan struct{}),
 	}
 
 	go func() {
@@ -384,25 +382,26 @@ func (q *handlerPriorityQueue) listen() {
 	retryInterval := 5 * time.Second
 
 	for {
+		stop := false
+
 		select {
 		case <-q.signal:
-			q.handle()
+			stop = q.handle()
 		case <-time.After(retryInterval):
-			giveup := q.retry()
-
-			if giveup {
-				q.send(commandClose, nil)
-				handleCommandClose(q.ses)
-			}
-		case <-q.stop:
-			return
+			stop = q.retry()
 		case <-q.ses.closed:
+			return
+		}
+
+		if stop {
+			q.send(commandClose, nil)
+			handleCommandClose(q.ses)
 			return
 		}
 	}
 }
 
-func (q *handlerPriorityQueue) handle() {
+func (q *handlerPriorityQueue) handle() bool {
 	q.mu.Lock()
 
 	for _, dg := range q.temp {
@@ -422,18 +421,13 @@ func (q *handlerPriorityQueue) handle() {
 
 		if err := handleCommand(q.cfg, q.ses, dg); err != nil {
 			slog.Error("handler: command", "dg", dg, "err", err)
-
-			if dg.command != commandClose {
-				q.send(commandClose, nil)
-				handleCommandClose(q.ses)
-			}
-
-			close(q.stop)
-			break
+			return true
 		}
 
 		q.next++
 	}
+
+	return false
 }
 
 func (q *handlerPriorityQueue) retry() bool {
