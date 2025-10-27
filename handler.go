@@ -175,14 +175,6 @@ func handleDatagram(cfg config, dg datagram) error {
 
 	ses, exists := getSession(dg.session)
 
-	if exists && dg.command == commandConnect {
-		if ses.opened() {
-			return errors.New("bidirectional proxying over opened session")
-		}
-
-		exists = false
-	}
-
 	if !exists {
 		var err error
 		ses, err = openSession(dg.session, cfg)
