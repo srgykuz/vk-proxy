@@ -205,7 +205,7 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 	slog.Debug("handler: command", "dg", dg)
 
 	if cfg.Log.Payload {
-		slog.Debug("handler: payload", "ses", ses.id, "in", bytesToHex(dg.payload))
+		slog.Debug("handler: payload", "ses", ses, "in", bytesToHex(dg.payload))
 	}
 
 	var err error
@@ -215,7 +215,7 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 		err = handleCommandConnect(cfg, ses, dg)
 
 		if err == nil {
-			slog.Info("handler: forwarding", "ses", ses.id)
+			slog.Info("handler: forwarding", "ses", ses)
 		}
 	case commandForward:
 		err = handleCommandForward(ses, dg)
@@ -257,7 +257,7 @@ func handleCommandConnect(cfg config, ses *session, dg datagram) error {
 }
 
 func handleCommandForward(ses *session, dg datagram) error {
-	if err := ses.write(dg.payload); err != nil {
+	if err := ses.writePeer(dg.payload); err != nil {
 		return err
 	}
 
@@ -278,11 +278,11 @@ func handleCommandRetry(ses *session, dg datagram) error {
 	dg, exists := ses.getHistory(pld.number)
 
 	if exists {
-		if err := ses.message(dg); err != nil {
+		if err := ses.sendDatagram(dg); err != nil {
 			return err
 		}
 	} else {
-		slog.Debug("handler: history miss", "ses", ses.id, "number", pld.number)
+		slog.Debug("handler: history miss", "ses", ses, "number", pld.number)
 	}
 
 	return nil
@@ -302,7 +302,7 @@ type handlerPriorityQueue struct {
 }
 
 func openHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
-	slog.Debug("handler: queue open", "ses", ses.id)
+	slog.Debug("handler: queue open", "ses", ses)
 
 	q := &handlerPriorityQueue{
 		cfg:     cfg,
@@ -326,7 +326,7 @@ func openHandlerPriorityQueue(cfg config, ses *session) *handlerPriorityQueue {
 }
 
 func (q *handlerPriorityQueue) close() {
-	slog.Debug("handler: queue close", "ses", q.ses.id)
+	slog.Debug("handler: queue close", "ses", q.ses)
 
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -373,7 +373,7 @@ func (q *handlerPriorityQueue) listen() {
 			stop = q.handle()
 		case <-time.After(retryInterval):
 			stop = q.retry()
-		case <-q.ses.closed:
+		case <-q.ses.onClose:
 			return
 		}
 
@@ -451,8 +451,8 @@ func (q *handlerPriorityQueue) send(cmd dgCmd, pld []byte) {
 	num := q.ses.nextNumber()
 	dg := newDatagram(q.ses.id, num, cmd, pld)
 
-	if err := q.ses.message(dg); err != nil {
-		slog.Error("handler: send", "ses", q.ses.id, "cmd", cmd, "err", err)
+	if err := q.ses.sendDatagram(dg); err != nil {
+		slog.Error("handler: send", "ses", q.ses, "cmd", cmd, "err", err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,11 +11,12 @@ import (
 )
 
 var (
-	errSessionClosed = errors.New("session is closed")
+	errSessionClosed    = errors.New("session is closed")
+	errSessionQueueFull = errors.New("session queue is full")
 )
 
 var sessions map[dgSes]*session = map[dgSes]*session{}
-var sessionsMu sync.Mutex
+var sessionsMu *sync.Mutex = &sync.Mutex{}
 
 func getSession(id dgSes) (*session, bool) {
 	sessionsMu.Lock()
@@ -32,28 +34,8 @@ func setSession(id dgSes, ses *session) {
 	sessions[id] = ses
 }
 
-func clearSessions(cfg config) error {
-	interval := cfg.Session.ClearInterval()
-
-	for {
-		time.Sleep(interval)
-
-		sessionsMu.Lock()
-
-		for id, ses := range sessions {
-			if ses.opened() {
-				continue
-			}
-
-			delete(sessions, id)
-		}
-
-		sessionsMu.Unlock()
-	}
-}
-
 var sessionID dgSes = 0
-var sessionIDMu sync.Mutex
+var sessionIDMu *sync.Mutex = &sync.Mutex{}
 
 func nextSessionID() dgSes {
 	sessionIDMu.Lock()
@@ -65,64 +47,68 @@ func nextSessionID() dgSes {
 }
 
 type session struct {
-	id       dgSes
-	mu       sync.Mutex
-	wg       sync.WaitGroup
-	number   dgNum
-	peer     net.Conn
-	isClosed bool
-	closed   chan struct{}
-	writes   chan []byte
-	messages chan string
-	forwards chan []byte
-	postID   int
-	history  map[dgNum]datagram
+	cfg       config
+	id        dgSes
+	number    dgNum
+	mu        sync.Mutex
+	wg        sync.WaitGroup
+	peer      net.Conn
+	closed    bool
+	onClose   chan struct{}
+	history   map[dgNum]datagram
+	writes    chan []byte
+	datagrams chan string
+	forwards  chan []byte
 }
 
 func openSession(id dgSes, cfg config) (*session, error) {
 	slog.Debug("session: open", "id", id)
 
 	s := &session{
-		id:       id,
-		mu:       sync.Mutex{},
-		wg:       sync.WaitGroup{},
-		number:   0,
-		peer:     nil,
-		isClosed: false,
-		closed:   make(chan struct{}),
-		writes:   make(chan []byte, 500),
-		messages: make(chan string, 500),
-		forwards: make(chan []byte, 500),
-		postID:   0,
-		history:  make(map[dgNum]datagram),
+		cfg:       cfg,
+		id:        id,
+		number:    0,
+		mu:        sync.Mutex{},
+		wg:        sync.WaitGroup{},
+		peer:      nil,
+		closed:    false,
+		onClose:   make(chan struct{}),
+		history:   make(map[dgNum]datagram),
+		writes:    make(chan []byte, cfg.Session.QueueSize),
+		datagrams: make(chan string, cfg.Session.QueueSize),
+		forwards:  make(chan []byte, cfg.Session.QueueSize),
 	}
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.handleWrites(cfg)
+		s.listenWrites()
 	}()
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.handleMessages(cfg)
+		s.listenDatagrams()
 	}()
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.handleForwards(cfg)
+		s.listenForwards()
 	}()
 
 	return s, nil
 }
 
+func (s *session) String() string {
+	return fmt.Sprint(s.id)
+}
+
 func (s *session) close() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	if s.isClosed {
+	if s.closed {
+		s.mu.Unlock()
 		return
 	}
 
@@ -132,170 +118,32 @@ func (s *session) close() {
 		slog.Debug("session: close", "id", s.id, "peer", s.peer.RemoteAddr().String())
 	}
 
+	s.closed = true
+
 	close(s.writes)
-	close(s.messages)
+	close(s.datagrams)
 	close(s.forwards)
 
+	s.mu.Unlock()
+
 	s.wg.Wait()
+
+	s.mu.Lock()
 
 	if s.peer != nil {
 		s.peer.Close()
 	}
 
-	close(s.closed)
-	s.isClosed = true
+	close(s.onClose)
+
+	s.mu.Unlock()
 }
 
-func (s *session) opened() bool {
+func (s *session) isClosed() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return !s.isClosed
-}
-
-func (s *session) write(b []byte) error {
-	clone := make([]byte, len(b))
-	copy(clone, b)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.isClosed {
-		return errSessionClosed
-	}
-
-	if s.peer == nil {
-		return errors.New("write: peer is nil")
-	}
-
-	select {
-	case s.writes <- clone:
-		return nil
-	default:
-		return errors.New("write: queue is full")
-	}
-}
-
-func (s *session) handleWrites(cfg config) {
-	for b := range s.writes {
-		if err := writeSocks(cfg, s, b); err != nil {
-			slog.Error("session: handle writes", "id", s.id, "err", err)
-		}
-	}
-}
-
-func (s *session) message(dg datagram) error {
-	msg := encodeDatagram(dg)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.isClosed {
-		return errSessionClosed
-	}
-
-	slog.Debug("session: message", "id", s.id, "dg", dg)
-
-	s.history[dg.number] = dg
-
-	select {
-	case s.messages <- msg:
-		return nil
-	default:
-		return errors.New("message: queue is full")
-	}
-}
-
-func (s *session) handleMessages(cfg config) {
-	interval := cfg.API.Interval()
-
-	for msg := range s.messages {
-		qr, err := encodeQR(cfg, msg)
-
-		if err == nil {
-			p := photosUploadParams{
-				data: qr,
-			}
-			_, err = photosUploadAndSave(cfg, p)
-		} else {
-			err = fmt.Errorf("encodeQR: %v", err)
-		}
-
-		if err != nil {
-			slog.Error("session: handle messages", "id", s.id, "err", err)
-		}
-
-		time.Sleep(interval)
-	}
-}
-
-func (s *session) forward(pld []byte) error {
-	clone := make([]byte, len(pld))
-	copy(clone, pld)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.isClosed {
-		return errSessionClosed
-	}
-
-	select {
-	case s.forwards <- clone:
-		return nil
-	default:
-		return errors.New("forward: queue is full")
-	}
-}
-
-func (s *session) handleForwards(cfg config) {
-	interval := cfg.API.Interval()
-	encode := func(pld []byte) ([]byte, error) {
-		chunks := bytesToChunks(pld, cfg.QR.MergeSize)
-		data := [][]byte{}
-
-		for _, chunk := range chunks {
-			num := s.nextNumber()
-			dg := newDatagram(s.id, num, commandForward, chunk)
-
-			s.mu.Lock()
-			s.history[dg.number] = dg
-			s.mu.Unlock()
-
-			content := encodeDatagram(dg)
-
-			slog.Debug("session: forward", "id", s.id, "dg", dg)
-
-			qr, err := encodeQR(cfg, content)
-
-			if err != nil {
-				return nil, err
-			}
-
-			data = append(data, qr)
-		}
-
-		return mergeQR(cfg, data)
-	}
-
-	for pld := range s.forwards {
-		qr, err := encode(pld)
-
-		if err == nil {
-			p := photosUploadParams{
-				data: qr,
-			}
-			_, err = photosUploadAndSave(cfg, p)
-		} else {
-			err = fmt.Errorf("encode: %v", err)
-		}
-
-		if err != nil {
-			slog.Error("session: handle forwards", "id", s.id, "err", err)
-		}
-
-		time.Sleep(interval)
-	}
+	return s.closed
 }
 
 func (s *session) nextNumber() dgNum {
@@ -321,4 +169,185 @@ func (s *session) getHistory(number dgNum) (datagram, bool) {
 	dg, exists := s.history[number]
 
 	return dg, exists
+}
+
+func (s *session) writePeer(b []byte) error {
+	clone := bytes.Clone(b)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return errSessionClosed
+	}
+
+	if s.peer == nil {
+		return errors.New("peer is nil")
+	}
+
+	select {
+	case s.writes <- clone:
+		return nil
+	default:
+		return errSessionQueueFull
+	}
+}
+
+func (s *session) listenWrites() {
+	for data := range s.writes {
+		if err := s.handleWrite(data); err != nil {
+			slog.Error("session: write", "id", s.id, "err", err)
+		}
+	}
+}
+
+func (s *session) handleWrite(data []byte) error {
+	return writeSocks(s.cfg, s, data)
+}
+
+func (s *session) sendDatagram(dg datagram) error {
+	clone := dg.clone()
+	encoded := encodeDatagram(dg)
+
+	slog.Debug("session: send", "id", s.id, "dg", dg)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return errSessionClosed
+	}
+
+	s.history[clone.number] = clone
+
+	select {
+	case s.datagrams <- encoded:
+		return nil
+	default:
+		return errSessionQueueFull
+	}
+}
+
+func (s *session) listenDatagrams() {
+	interval := s.cfg.API.Interval()
+
+	for data := range s.datagrams {
+		if err := s.handleSend(data); err != nil {
+			slog.Error("session: send", "id", s.id, "err", err)
+		}
+
+		time.Sleep(interval)
+	}
+}
+
+func (s *session) handleSend(data string) error {
+	qr, err := encodeQR(s.cfg, data)
+
+	if err != nil {
+		return fmt.Errorf("encode: %v", err)
+	}
+
+	p := photosUploadParams{
+		data: qr,
+	}
+
+	if _, err = photosUploadAndSave(s.cfg, p); err != nil {
+		return fmt.Errorf("upload: %v", err)
+	}
+
+	return nil
+}
+
+func (s *session) sendForward(pld []byte) error {
+	clone := bytes.Clone(pld)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return errSessionClosed
+	}
+
+	select {
+	case s.forwards <- clone:
+		return nil
+	default:
+		return errSessionQueueFull
+	}
+}
+
+func (s *session) listenForwards() {
+	interval := s.cfg.API.Interval()
+
+	for data := range s.forwards {
+		if err := s.handleForward(data); err != nil {
+			slog.Error("session: forward", "id", s.id, "err", err)
+		}
+
+		time.Sleep(interval)
+	}
+}
+
+func (s *session) handleForward(data []byte) error {
+	chunks := bytesToChunks(data, s.cfg.QR.MergeSize)
+	datagrams := make([]datagram, 0, len(chunks))
+
+	for _, chunk := range chunks {
+		num := s.nextNumber()
+		dg := newDatagram(s.id, num, commandForward, chunk)
+		datagrams = append(datagrams, dg)
+
+		slog.Debug("session: forward", "id", s.id, "dg", dg)
+
+		s.mu.Lock()
+		s.history[dg.number] = dg
+		s.mu.Unlock()
+	}
+
+	codes := make([][]byte, 0, len(datagrams))
+
+	for _, dg := range datagrams {
+		content := encodeDatagram(dg)
+		qr, err := encodeQR(s.cfg, content)
+
+		if err != nil {
+			return fmt.Errorf("encode: %v", err)
+		}
+
+		codes = append(codes, qr)
+	}
+
+	qr, err := mergeQR(s.cfg, codes)
+
+	if err != nil {
+		return fmt.Errorf("merge: %v", err)
+	}
+
+	p := photosUploadParams{
+		data: qr,
+	}
+
+	if _, err = photosUploadAndSave(s.cfg, p); err != nil {
+		return fmt.Errorf("upload: %v", err)
+	}
+
+	return nil
+}
+
+func clearSession(cfg config) error {
+	interval := cfg.Session.ClearInterval()
+
+	for {
+		time.Sleep(interval)
+
+		sessionsMu.Lock()
+
+		for id, ses := range sessions {
+			if ses.isClosed() {
+				delete(sessions, id)
+			}
+		}
+
+		sessionsMu.Unlock()
+	}
 }

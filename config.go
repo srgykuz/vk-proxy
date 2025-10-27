@@ -22,6 +22,7 @@ type configLog struct {
 
 type configSession struct {
 	ClearIntervalMS int `json:"clearInterval"`
+	QueueSize       int `json:"queueSize"`
 }
 
 func (cfg configSession) ClearInterval() time.Duration {
@@ -88,6 +89,7 @@ func defaultConfig() config {
 		},
 		Session: configSession{
 			ClearIntervalMS: 900 * 1000,
+			QueueSize:       500,
 		},
 		Socks: configSocks{
 			ListenHost:        "127.0.0.1",

@@ -62,13 +62,13 @@ func listenSocks(cfg config) error {
 func acceptSocks(cfg config, ses *session, stage int) {
 	peer := ses.peer.RemoteAddr().String()
 
-	defer slog.Info("socks: closed", "peer", peer, "ses", ses.id)
+	defer slog.Info("socks: closed", "peer", peer, "ses", ses)
 	defer ses.close()
 
-	slog.Debug("socks: accept", "peer", peer, "ses", ses.id)
+	slog.Debug("socks: accept", "peer", peer, "ses", ses)
 
 	if err := handleSocks(cfg, ses, stage); err != nil {
-		slog.Error("socks: handle", "peer", peer, "ses", ses.id, "err", err)
+		slog.Error("socks: handle", "peer", peer, "ses", ses, "err", err)
 	}
 }
 
@@ -152,7 +152,7 @@ func readSocks(cfg config, ses *session, stage int, fwdBuf opBuffer) error {
 				}
 
 				if err == nil {
-					slog.Info("socks: forwarding", "peer", peer, "ses", ses.id, "addr", addr)
+					slog.Info("socks: forwarding", "peer", peer, "ses", ses, "addr", addr)
 				}
 
 				stage = stageForward
@@ -209,7 +209,7 @@ func forwardsSocks(cfg config, ses *session, buf opBuffer) error {
 		buf.mu.Unlock()
 
 		if len(in) > 0 {
-			slog.Debug("socks: forward", "ses", ses.id, "len", len(in))
+			slog.Debug("socks: forward", "ses", ses, "len", len(in))
 
 			err := handleSocksStageForward(ses, in, cfg.Socks.ForwardSize)
 
@@ -318,8 +318,7 @@ func handleSocksStageConnect(in []byte) (address, []byte, error) {
 		port: port,
 	}
 
-	out := make([]byte, len(in))
-	copy(out, in)
+	out := bytes.Clone(in)
 	out[1] = 0x00
 
 	return dst, out, nil
@@ -331,7 +330,7 @@ func handleSocksStageConnectSession(ses *session, addr address) error {
 	pldb := pld.encode()
 	dg := newDatagram(ses.id, num, commandConnect, pldb)
 
-	if err := ses.message(dg); err != nil {
+	if err := ses.sendDatagram(dg); err != nil {
 		return err
 	}
 
@@ -342,7 +341,7 @@ func handleSocksStageForward(ses *session, in []byte, chunkSize int) error {
 	chunks := bytesToChunks(in, chunkSize)
 
 	for _, chunk := range chunks {
-		if err := ses.forward(chunk); err != nil {
+		if err := ses.sendForward(chunk); err != nil {
 			return err
 		}
 	}
