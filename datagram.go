@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -60,9 +61,7 @@ func (dg datagram) isZero() bool {
 }
 
 func (dg datagram) clone() datagram {
-	pld := make([]byte, len(dg.payload))
-	copy(pld, dg.payload)
-	dg.payload = pld
+	dg.payload = bytes.Clone(dg.payload)
 
 	return dg
 }
