@@ -218,15 +218,26 @@ func (s *session) listenDatagrams() {
 	interval := s.cfg.API.Interval()
 
 	for dg := range s.datagrams {
-		if err := s.handleDatagram(dg); err != nil {
-			slog.Error("session: send", "id", s.id, "err", err)
+		fragments := s.datagramToFragments(dg)
+
+		for _, fg := range fragments {
+			slog.Debug("session: send", "id", s.id, "dg", fg)
 		}
+
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+
+			if err := s.sendFragments(fragments); err != nil {
+				slog.Error("session: send", "id", s.id, "err", err)
+			}
+		}()
 
 		time.Sleep(interval)
 	}
 }
 
-func (s *session) handleDatagram(dg datagram) error {
+func (s *session) datagramToFragments(dg datagram) []datagram {
 	fragments := []datagram{}
 
 	if dg.command == commandForward && dg.number == 0 {
@@ -244,12 +255,15 @@ func (s *session) handleDatagram(dg datagram) error {
 	s.mu.Lock()
 
 	for _, fragment := range fragments {
-		slog.Debug("session: send", "id", s.id, "dg", fragment)
 		s.history[fragment.number] = fragment
 	}
 
 	s.mu.Unlock()
 
+	return fragments
+}
+
+func (s *session) sendFragments(fragments []datagram) error {
 	var qr []byte
 	var err error
 
