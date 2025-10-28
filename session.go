@@ -186,14 +186,10 @@ func (s *session) writePeer(b []byte) error {
 
 func (s *session) listenWrites() {
 	for data := range s.writes {
-		if err := s.handleWrite(data); err != nil {
+		if err := writeSocks(s.cfg, s, data); err != nil {
 			slog.Error("session: write", "id", s.id, "err", err)
 		}
 	}
-}
-
-func (s *session) handleWrite(data []byte) error {
-	return writeSocks(s.cfg, s, data)
 }
 
 func (s *session) sendDatagram(dg datagram) error {
@@ -220,9 +216,14 @@ func (s *session) listenDatagrams() {
 	for dg := range s.datagrams {
 		fragments := s.datagramToFragments(dg)
 
+		s.mu.Lock()
+
 		for _, fg := range fragments {
 			slog.Debug("session: send", "id", s.id, "dg", fg)
+			s.history[fg.number] = fg
 		}
+
+		s.mu.Unlock()
 
 		s.wg.Add(1)
 		go func() {
@@ -238,6 +239,10 @@ func (s *session) listenDatagrams() {
 }
 
 func (s *session) datagramToFragments(dg datagram) []datagram {
+	if dg.session == 0 {
+		dg.session = s.id
+	}
+
 	fragments := []datagram{}
 
 	if dg.command == commandForward && dg.number == 0 {
@@ -249,16 +254,12 @@ func (s *session) datagramToFragments(dg datagram) []datagram {
 			fragments = append(fragments, fragment)
 		}
 	} else {
+		if dg.number == 0 {
+			dg.number = s.nextNumber()
+		}
+
 		fragments = append(fragments, dg)
 	}
-
-	s.mu.Lock()
-
-	for _, fragment := range fragments {
-		s.history[fragment.number] = fragment
-	}
-
-	s.mu.Unlock()
 
 	return fragments
 }
@@ -273,8 +274,8 @@ func (s *session) sendFragments(fragments []datagram) error {
 	} else {
 		codes := make([][]byte, 0, len(fragments))
 
-		for _, fragment := range fragments {
-			content := encodeDatagram(fragment)
+		for _, fg := range fragments {
+			content := encodeDatagram(fg)
 			qr, err = encodeQR(s.cfg, content)
 
 			if err != nil {

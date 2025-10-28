@@ -448,8 +448,7 @@ func (q *handlerPriorityQueue) retry() bool {
 }
 
 func (q *handlerPriorityQueue) send(cmd dgCmd, pld []byte) {
-	num := q.ses.nextNumber()
-	dg := newDatagram(q.ses.id, num, cmd, pld)
+	dg := newDatagram(0, 0, cmd, pld)
 
 	if err := q.ses.sendDatagram(dg); err != nil {
 		slog.Error("handler: send", "ses", q.ses, "cmd", cmd, "err", err)

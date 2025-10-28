@@ -325,10 +325,9 @@ func handleSocksStageConnect(in []byte) (address, []byte, error) {
 }
 
 func handleSocksStageConnectSession(ses *session, addr address) error {
-	num := ses.nextNumber()
 	pld := payloadConnect(addr)
 	pldb := pld.encode()
-	dg := newDatagram(ses.id, num, commandConnect, pldb)
+	dg := newDatagram(0, 0, commandConnect, pldb)
 
 	if err := ses.sendDatagram(dg); err != nil {
 		return err
@@ -341,7 +340,7 @@ func handleSocksStageForward(ses *session, in []byte, chunkSize int) error {
 	chunks := bytesToChunks(in, chunkSize)
 
 	for _, chunk := range chunks {
-		dg := newDatagram(ses.id, 0, commandForward, chunk)
+		dg := newDatagram(0, 0, commandForward, chunk)
 
 		if err := ses.sendDatagram(dg); err != nil {
 			return err
