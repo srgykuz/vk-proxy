@@ -341,7 +341,9 @@ func handleSocksStageForward(ses *session, in []byte, chunkSize int) error {
 	chunks := bytesToChunks(in, chunkSize)
 
 	for _, chunk := range chunks {
-		if err := ses.sendForward(chunk); err != nil {
+		dg := newDatagram(ses.id, 0, commandForward, chunk)
+
+		if err := ses.sendDatagram(dg); err != nil {
 			return err
 		}
 	}

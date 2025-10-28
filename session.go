@@ -57,8 +57,7 @@ type session struct {
 	onClose   chan struct{}
 	history   map[dgNum]datagram
 	writes    chan []byte
-	datagrams chan string
-	forwards  chan []byte
+	datagrams chan datagram
 }
 
 func openSession(id dgSes, cfg config) (*session, error) {
@@ -75,8 +74,7 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		onClose:   make(chan struct{}),
 		history:   make(map[dgNum]datagram),
 		writes:    make(chan []byte, cfg.Session.QueueSize),
-		datagrams: make(chan string, cfg.Session.QueueSize),
-		forwards:  make(chan []byte, cfg.Session.QueueSize),
+		datagrams: make(chan datagram, cfg.Session.QueueSize),
 	}
 
 	s.wg.Add(1)
@@ -89,12 +87,6 @@ func openSession(id dgSes, cfg config) (*session, error) {
 	go func() {
 		defer s.wg.Done()
 		s.listenDatagrams()
-	}()
-
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.listenForwards()
 	}()
 
 	return s, nil
@@ -122,7 +114,6 @@ func (s *session) close() {
 
 	close(s.writes)
 	close(s.datagrams)
-	close(s.forwards)
 
 	s.mu.Unlock()
 
@@ -207,9 +198,6 @@ func (s *session) handleWrite(data []byte) error {
 
 func (s *session) sendDatagram(dg datagram) error {
 	clone := dg.clone()
-	encoded := encodeDatagram(dg)
-
-	slog.Debug("session: send", "id", s.id, "dg", dg)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -218,10 +206,8 @@ func (s *session) sendDatagram(dg datagram) error {
 		return errSessionClosed
 	}
 
-	s.history[clone.number] = clone
-
 	select {
-	case s.datagrams <- encoded:
+	case s.datagrams <- clone:
 		return nil
 	default:
 		return errSessionQueueFull
@@ -231,8 +217,8 @@ func (s *session) sendDatagram(dg datagram) error {
 func (s *session) listenDatagrams() {
 	interval := s.cfg.API.Interval()
 
-	for data := range s.datagrams {
-		if err := s.handleSend(data); err != nil {
+	for dg := range s.datagrams {
+		if err := s.handleDatagram(dg); err != nil {
 			slog.Error("session: send", "id", s.id, "err", err)
 		}
 
@@ -240,8 +226,54 @@ func (s *session) listenDatagrams() {
 	}
 }
 
-func (s *session) handleSend(data string) error {
-	qr, err := encodeQR(s.cfg, data)
+func (s *session) handleDatagram(dg datagram) error {
+	fragments := []datagram{}
+
+	if dg.command == commandForward && dg.number == 0 {
+		chunks := bytesToChunks(dg.payload, s.cfg.QR.MergeSize)
+
+		for _, chunk := range chunks {
+			num := s.nextNumber()
+			fragment := newDatagram(dg.session, num, dg.command, chunk)
+			fragments = append(fragments, fragment)
+		}
+	} else {
+		fragments = append(fragments, dg)
+	}
+
+	s.mu.Lock()
+
+	for _, fragment := range fragments {
+		slog.Debug("session: send", "id", s.id, "dg", fragment)
+		s.history[fragment.number] = fragment
+	}
+
+	s.mu.Unlock()
+
+	var qr []byte
+	var err error
+
+	if len(fragments) == 1 {
+		content := encodeDatagram(fragments[0])
+		qr, err = encodeQR(s.cfg, content)
+	} else {
+		codes := make([][]byte, 0, len(fragments))
+
+		for _, fragment := range fragments {
+			content := encodeDatagram(fragment)
+			qr, err = encodeQR(s.cfg, content)
+
+			if err != nil {
+				break
+			}
+
+			codes = append(codes, qr)
+		}
+
+		if err == nil {
+			qr, err = mergeQR(s.cfg, codes)
+		}
+	}
 
 	if err != nil {
 		return fmt.Errorf("encode: %v", err)
@@ -251,83 +283,7 @@ func (s *session) handleSend(data string) error {
 		data: qr,
 	}
 
-	if _, err = photosUploadAndSave(s.cfg, p); err != nil {
-		return fmt.Errorf("upload: %v", err)
-	}
-
-	return nil
-}
-
-func (s *session) sendForward(pld []byte) error {
-	clone := bytes.Clone(pld)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return errSessionClosed
-	}
-
-	select {
-	case s.forwards <- clone:
-		return nil
-	default:
-		return errSessionQueueFull
-	}
-}
-
-func (s *session) listenForwards() {
-	interval := s.cfg.API.Interval()
-
-	for data := range s.forwards {
-		if err := s.handleForward(data); err != nil {
-			slog.Error("session: forward", "id", s.id, "err", err)
-		}
-
-		time.Sleep(interval)
-	}
-}
-
-func (s *session) handleForward(data []byte) error {
-	chunks := bytesToChunks(data, s.cfg.QR.MergeSize)
-	datagrams := make([]datagram, 0, len(chunks))
-
-	for _, chunk := range chunks {
-		num := s.nextNumber()
-		dg := newDatagram(s.id, num, commandForward, chunk)
-		datagrams = append(datagrams, dg)
-
-		slog.Debug("session: forward", "id", s.id, "dg", dg)
-
-		s.mu.Lock()
-		s.history[dg.number] = dg
-		s.mu.Unlock()
-	}
-
-	codes := make([][]byte, 0, len(datagrams))
-
-	for _, dg := range datagrams {
-		content := encodeDatagram(dg)
-		qr, err := encodeQR(s.cfg, content)
-
-		if err != nil {
-			return fmt.Errorf("encode: %v", err)
-		}
-
-		codes = append(codes, qr)
-	}
-
-	qr, err := mergeQR(s.cfg, codes)
-
-	if err != nil {
-		return fmt.Errorf("merge: %v", err)
-	}
-
-	p := photosUploadParams{
-		data: qr,
-	}
-
-	if _, err = photosUploadAndSave(s.cfg, p); err != nil {
+	if _, err := photosUploadAndSave(s.cfg, p); err != nil {
 		return fmt.Errorf("upload: %v", err)
 	}
 
