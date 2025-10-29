@@ -19,6 +19,8 @@ type (
 	dgCmd int16
 )
 
+const datagramHeaderLen = 2 + 4 + 8 + 4 + 4 + 2
+
 const (
 	commandConnect dgCmd = iota + 1
 	commandForward
@@ -52,6 +54,10 @@ func (dg datagram) String() string {
 	)
 }
 
+func (dg datagram) Len() int {
+	return datagramHeaderLen + len(dg.payload)
+}
+
 func (dg datagram) isLoopback() bool {
 	return dg.device == deviceID
 }
@@ -79,7 +85,7 @@ func newDatagram(ses dgSes, num dgNum, cmd dgCmd, pld []byte) datagram {
 }
 
 func encodeDatagram(dg datagram) string {
-	data := make([]byte, 0, 24+len(dg.payload))
+	data := make([]byte, 0, dg.Len())
 
 	data = binary.BigEndian.AppendUint16(data, uint16(dg.version))
 	data = binary.BigEndian.AppendUint32(data, uint32(dg.checksum))
@@ -104,7 +110,7 @@ func decodeDatagram(s string) (datagram, error) {
 		return datagram{}, err
 	}
 
-	if len(data) < 24 {
+	if len(data) < datagramHeaderLen {
 		return datagram{}, errDatagramMalformed
 	}
 
@@ -114,7 +120,7 @@ func decodeDatagram(s string) (datagram, error) {
 	ses := binary.BigEndian.Uint32(data[14:18])
 	num := binary.BigEndian.Uint32(data[18:22])
 	cmd := binary.BigEndian.Uint16(data[22:24])
-	pld := data[24:]
+	pld := data[datagramHeaderLen:]
 
 	binary.BigEndian.PutUint32(data[2:6], 0)
 	crc := crc32.ChecksumIEEE(data)
