@@ -246,7 +246,7 @@ func (s *session) datagramToFragments(dg datagram) []datagram {
 	fragments := []datagram{}
 
 	if dg.command == commandForward && dg.number == 0 {
-		chunks := bytesToChunks(dg.payload, s.cfg.QR.MergeSize)
+		chunks := bytesToChunks(dg.payload, s.cfg.QR.MergeSize, 0)
 
 		for _, chunk := range chunks {
 			num := s.nextNumber()

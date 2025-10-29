@@ -337,7 +337,7 @@ func handleSocksStageConnectSession(ses *session, addr address) error {
 }
 
 func handleSocksStageForward(ses *session, in []byte, chunkSize int) error {
-	chunks := bytesToChunks(in, chunkSize)
+	chunks := bytesToChunks(in, chunkSize, 0)
 
 	for _, chunk := range chunks {
 		dg := newDatagram(0, 0, commandForward, chunk)
@@ -367,13 +367,31 @@ func bytesToHex(b []byte) string {
 	return fmt.Sprintf("% x", b)
 }
 
-func bytesToChunks(b []byte, size int) [][]byte {
+func bytesToChunks(b []byte, size int, count int) [][]byte {
+	if count == 1 {
+		return [][]byte{b}
+	}
+
 	chunks := [][]byte{}
 
 	for start := 0; start < len(b); start += size {
 		end := min(start+size, len(b))
 		chunk := b[start:end]
 		chunks = append(chunks, chunk)
+	}
+
+	if count > 0 && len(chunks) > count-1 {
+		counted := chunks[:count-1]
+		remaining := chunks[count-1:]
+		merged := []byte{}
+
+		for _, b := range remaining {
+			merged = append(merged, b...)
+		}
+
+		counted = append(counted, merged)
+
+		return counted
 	}
 
 	return chunks
