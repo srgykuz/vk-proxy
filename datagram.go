@@ -33,6 +33,7 @@ var (
 	errDatagramMalformed = errors.New("datagram is malformed")
 )
 
+var datagramHeaderLenEncoded = newDatagram(0, 0, 0, nil).LenEncoded()
 var deviceID = dgDev(time.Now().UnixMilli())
 
 type datagram struct {
@@ -75,6 +76,18 @@ func (dg datagram) clone() datagram {
 	dg.payload = bytes.Clone(dg.payload)
 
 	return dg
+}
+
+func datagramCalcMaxLen(maxLenEncoded int) int {
+	max := 3 * float64(maxLenEncoded) / 4
+	min := max - 3
+	isValidBase64Len := maxLenEncoded%4 == 0
+
+	if isValidBase64Len {
+		return int(max)
+	}
+
+	return int(math.Ceil(min))
 }
 
 func newDatagram(ses dgSes, num dgNum, cmd dgCmd, pld []byte) datagram {
