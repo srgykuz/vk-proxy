@@ -117,7 +117,7 @@ func handleUpdatePhoto(cfg config, url string) ([]datagram, error) {
 		return nil, fmt.Errorf("download url: %v", err)
 	}
 
-	file, err := saveQR(cfg, b, "jpg")
+	file, err := saveQR(cfg.QR, b, "jpg")
 
 	if err != nil {
 		return nil, fmt.Errorf("save qr: %v", err)
@@ -125,7 +125,7 @@ func handleUpdatePhoto(cfg config, url string) ([]datagram, error) {
 
 	defer os.Remove(file)
 
-	content, err := decodeQR(cfg, file)
+	content, err := decodeQR(cfg.QR, file)
 
 	if err != nil {
 		return nil, fmt.Errorf("decode qr: %v", err)

@@ -16,6 +16,8 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
+type qrLevel = qrcode.RecoveryLevel
+
 const (
 	qrLevelLow     = qrcode.Low
 	qrLevelMedium  = qrcode.Medium
@@ -23,15 +25,15 @@ const (
 	qrLevelHighest = qrcode.Highest
 )
 
-var qrMaxLen = map[qrcode.RecoveryLevel]int{
-	qrcode.Low:     2953,
-	qrcode.Medium:  2331,
-	qrcode.High:    1663,
-	qrcode.Highest: 1273,
+var qrMaxLen = map[qrLevel]int{
+	qrLevelLow:     2953,
+	qrLevelMedium:  2331,
+	qrLevelHigh:    1663,
+	qrLevelHighest: 1273,
 }
 
-func encodeQR(cfg config, content string) ([]byte, error) {
-	level := qrcode.RecoveryLevel(cfg.QR.ImageLevel)
+func encodeQR(cfg configQR, content string) ([]byte, error) {
+	level := qrLevel(cfg.ImageLevel)
 
 	if len(content) > qrMaxLen[level] {
 		return nil, fmt.Errorf("too large content: %v > %v", len(content), qrMaxLen[level])
@@ -43,7 +45,7 @@ func encodeQR(cfg config, content string) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err := qr.PNG(cfg.QR.ImageSize)
+	data, err := qr.PNG(cfg.ImageSize)
 
 	if err != nil {
 		return nil, err
@@ -52,12 +54,12 @@ func encodeQR(cfg config, content string) ([]byte, error) {
 	return data, nil
 }
 
-func decodeQR(cfg config, file string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.QR.ZBarTimeout())
+func decodeQR(cfg configQR, file string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ZBarTimeout())
 	defer cancel()
 
 	buf := bytes.Buffer{}
-	cmd := exec.CommandContext(ctx, cfg.QR.ZBarPath, file)
+	cmd := exec.CommandContext(ctx, cfg.ZBarPath, file)
 
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
@@ -93,14 +95,14 @@ func decodeQR(cfg config, file string) ([]string, error) {
 	return content, nil
 }
 
-func saveQR(cfg config, data []byte, ext string) (string, error) {
+func saveQR(cfg configQR, data []byte, ext string) (string, error) {
 	pattern := "qr-*"
 
 	if len(ext) > 0 {
 		pattern += "." + ext
 	}
 
-	f, err := os.CreateTemp(cfg.QR.SaveDir, pattern)
+	f, err := os.CreateTemp(cfg.SaveDir, pattern)
 
 	if err != nil {
 		return "", err
@@ -119,7 +121,7 @@ func saveQR(cfg config, data []byte, ext string) (string, error) {
 	return f.Name(), nil
 }
 
-func mergeQR(cfg config, data [][]byte) ([]byte, error) {
+func mergeQR(cfg configQR, data [][]byte) ([]byte, error) {
 	n := len(data)
 
 	if n == 0 {
@@ -130,7 +132,7 @@ func mergeQR(cfg config, data [][]byte) ([]byte, error) {
 	cols := side
 	rows := int(math.Ceil(float64(n) / float64(cols)))
 
-	size := cfg.QR.ImageSize
+	size := cfg.ImageSize
 	width := cols * size
 	height := rows * size
 

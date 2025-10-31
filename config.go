@@ -160,13 +160,13 @@ func validateConfig(cfg config) error {
 
 func validateQR(cfg config) error {
 	content := "test"
-	data, err := encodeQR(cfg, content)
+	data, err := encodeQR(cfg.QR, content)
 
 	if err != nil {
 		return err
 	}
 
-	file, err := saveQR(cfg, data, "png")
+	file, err := saveQR(cfg.QR, data, "png")
 
 	if err != nil {
 		return err
@@ -174,7 +174,7 @@ func validateQR(cfg config) error {
 
 	defer os.Remove(file)
 
-	decoded, err := decodeQR(cfg, file)
+	decoded, err := decodeQR(cfg.QR, file)
 
 	if err != nil {
 		return err
