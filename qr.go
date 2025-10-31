@@ -16,17 +16,25 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
+const (
+	qrLevelLow     = qrcode.Low
+	qrLevelMedium  = qrcode.Medium
+	qrLevelHigh    = qrcode.High
+	qrLevelHighest = qrcode.Highest
+)
+
+var qrMaxLen = map[qrcode.RecoveryLevel]int{
+	qrcode.Low:     2953,
+	qrcode.Medium:  2331,
+	qrcode.High:    1663,
+	qrcode.Highest: 1273,
+}
+
 func encodeQR(cfg config, content string) ([]byte, error) {
 	level := qrcode.RecoveryLevel(cfg.QR.ImageLevel)
-	limits := map[qrcode.RecoveryLevel]int{
-		qrcode.Low:     2953,
-		qrcode.Medium:  2331,
-		qrcode.High:    1663,
-		qrcode.Highest: 1273,
-	}
 
-	if len(content) > limits[level] {
-		return nil, fmt.Errorf("too large content: %v > %v", len(content), limits[level])
+	if len(content) > qrMaxLen[level] {
+		return nil, fmt.Errorf("too large content: %v > %v", len(content), qrMaxLen[level])
 	}
 
 	qr, err := qrcode.New(content, level)
