@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"math"
 	"time"
 )
 
@@ -56,6 +57,10 @@ func (dg datagram) String() string {
 
 func (dg datagram) Len() int {
 	return datagramHeaderLen + len(dg.payload)
+}
+
+func (dg datagram) LenEncoded() int {
+	return 4 * int(math.Ceil(float64(dg.Len())/3))
 }
 
 func (dg datagram) isLoopback() bool {
