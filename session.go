@@ -5,15 +5,46 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
+)
+
+const (
+	methodMessage int = iota + 1
+	methodPost
+	methodComment
+	methodDoc
+	methodQR
 )
 
 var (
 	errSessionClosed    = errors.New("session is closed")
 	errSessionQueueFull = errors.New("session queue is full")
 )
+
+var methodsMaxLenEncoded = map[int]int{}
+var methodsMaxLenPayload = map[int]int{}
+
+func initSession(cfg config) error {
+	methodsMaxLenEncoded = map[int]int{
+		methodMessage: 4096,
+		methodPost:    16000,
+		methodComment: 16000,
+		methodDoc:     1 * 1024 * 1024,
+		methodQR:      qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
+	}
+	methodsMaxLenPayload = map[int]int{
+		methodMessage: datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
+		methodPost:    datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
+		methodComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodComment] - datagramHeaderLenEncoded),
+		methodDoc:     datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
+		methodQR:      datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
+	}
+
+	return nil
+}
 
 var sessions map[dgSes]*session = map[dgSes]*session{}
 var sessionsMu *sync.Mutex = &sync.Mutex{}
@@ -58,6 +89,7 @@ type session struct {
 	history   map[dgNum]datagram
 	writes    chan []byte
 	datagrams chan datagram
+	post      wallPostResponse
 }
 
 func openSession(id dgSes, cfg config) (*session, error) {
@@ -75,6 +107,7 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		history:   make(map[dgNum]datagram),
 		writes:    make(chan []byte, cfg.Session.QueueSize),
 		datagrams: make(chan datagram, cfg.Session.QueueSize),
+		post:      wallPostResponse{},
 	}
 
 	s.wg.Add(1)
@@ -202,6 +235,10 @@ func (s *session) sendDatagram(dg datagram) error {
 		return errSessionClosed
 	}
 
+	if clone.session == 0 {
+		clone.session = s.id
+	}
+
 	select {
 	case s.datagrams <- clone:
 		return nil
@@ -211,87 +248,252 @@ func (s *session) sendDatagram(dg datagram) error {
 }
 
 func (s *session) listenDatagrams() {
-	interval := s.cfg.API.Interval()
-
 	for dg := range s.datagrams {
-		fragments := s.datagramToFragments(dg)
+		methods, fragments, err := s.createPlan(dg)
+
+		if err != nil {
+			slog.Error("session: plan", "id", s.id, "dg", dg, "err", err)
+			continue
+		}
 
 		s.mu.Lock()
 
 		for _, fg := range fragments {
-			slog.Debug("session: send", "id", s.id, "dg", fg)
 			s.history[fg.number] = fg
 		}
 
 		s.mu.Unlock()
 
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-
-			if err := s.sendFragments(fragments); err != nil {
-				slog.Error("session: send", "id", s.id, "err", err)
-			}
-		}()
-
-		time.Sleep(interval)
+		if err := s.executePlan(methods, fragments); err != nil {
+			slog.Error("session: plan", "id", s.id, "dg", dg, "err", err)
+		}
 	}
 }
 
-func (s *session) datagramToFragments(dg datagram) []datagram {
-	if dg.session == 0 {
-		dg.session = s.id
+func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
+	fastMethods := []int{methodMessage, methodPost}
+	bigMethods := []int{methodPost, methodDoc, methodQR}
+
+	s.mu.Lock()
+
+	if s.post.PostID > 0 {
+		fastMethods = append(fastMethods, methodComment)
+		bigMethods = append(bigMethods, methodComment)
 	}
 
+	s.mu.Unlock()
+
+	methods := []int{}
 	fragments := []datagram{}
 
-	if dg.command == commandForward && dg.number == 0 {
-		chunks := bytesToChunks(dg.payload, s.cfg.QR.MergeSize, 0)
-
-		for _, chunk := range chunks {
-			num := s.nextNumber()
-			fragment := newDatagram(dg.session, num, dg.command, chunk)
-			fragments = append(fragments, fragment)
-		}
-	} else {
+	if dg.LenEncoded() <= methodsMaxLenEncoded[methodMessage] {
 		if dg.number == 0 {
 			dg.number = s.nextNumber()
 		}
 
+		n := rand.Int31n(int32(len(fastMethods)))
+		methods = append(methods, fastMethods[n])
 		fragments = append(fragments, dg)
+
+		return methods, fragments, nil
 	}
 
-	return fragments
+	if dg.number != 0 {
+		availableMethods := []int{}
+
+		for _, m := range bigMethods {
+			if dg.LenEncoded() <= methodsMaxLenEncoded[m] {
+				availableMethods = append(availableMethods, m)
+			}
+		}
+
+		if len(availableMethods) == 0 {
+			return nil, nil, errors.New("no methods available")
+		}
+
+		n := rand.Int31n(int32(len(availableMethods)))
+		methods = append(methods, availableMethods[n])
+		fragments = append(fragments, dg)
+
+		return methods, fragments, nil
+	}
+
+	for len(dg.payload) > 0 {
+		n := rand.Int31n(int32(len(bigMethods)))
+		method := bigMethods[n]
+		chunks := bytesToChunks(dg.payload, methodsMaxLenPayload[method], 2)
+
+		if len(chunks) == 0 || len(chunks) > 2 {
+			return nil, nil, errors.New("unexpected chunks logic")
+		}
+
+		if len(chunks) == 2 {
+			dg.payload = chunks[1]
+		} else {
+			dg.payload = nil
+		}
+
+		num := s.nextNumber()
+		fg := newDatagram(dg.session, num, dg.command, chunks[0])
+
+		if fg.LenEncoded() > methodsMaxLenEncoded[method] {
+			return nil, nil, errors.New("unexpected payload logic")
+		}
+
+		methods = append(methods, method)
+		fragments = append(fragments, fg)
+
+		if len(methods) > 1000 {
+			return nil, nil, errors.New("infinite loop protection")
+		}
+	}
+
+	return methods, fragments, nil
 }
 
-func (s *session) sendFragments(fragments []datagram) error {
-	var qr []byte
-	var err error
-
-	if len(fragments) == 1 {
-		content := encodeDatagram(fragments[0])
-		qr, err = encodeQR(s.cfg, content)
-	} else {
-		codes := make([][]byte, 0, len(fragments))
-
-		for _, fg := range fragments {
-			content := encodeDatagram(fg)
-			qr, err = encodeQR(s.cfg, content)
-
-			if err != nil {
-				break
-			}
-
-			codes = append(codes, qr)
-		}
-
-		if err == nil {
-			qr, err = mergeQR(s.cfg, codes)
-		}
+func (s *session) executePlan(methods []int, fragments []datagram) error {
+	if len(methods) != len(fragments) {
+		return errors.New("methods and fragments mismatch")
 	}
 
+	qrs := []datagram{}
+
+	for i, method := range methods {
+		fg := fragments[i]
+
+		if method == methodQR {
+			qrs = append(qrs, fg)
+			continue
+		}
+
+		var f func(string) error
+
+		switch method {
+		case methodMessage:
+			f = s.executeMethodMessage
+		case methodPost:
+			f = s.executeMethodPost
+		case methodComment:
+			f = s.executeMethodComment
+		case methodDoc:
+			f = s.executeMethodDoc
+		default:
+			return fmt.Errorf("unknown method: %v", method)
+		}
+
+		encoded := encodeDatagram(fg)
+		slog.Debug("session: send", "id", s.id, "method", method, "dg", fg)
+
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+
+			if err := f(encoded); err != nil {
+				slog.Error("session: send", "id", s.id, "method", method, "dg", fg, "err", err)
+			}
+		}()
+	}
+
+	if len(qrs) > 0 {
+		encoded := make([]string, len(qrs))
+
+		for i, fg := range qrs {
+			encoded[i] = encodeDatagram(fg)
+			slog.Debug("session: send", "id", s.id, "method", methodQR, "dg", fg)
+		}
+
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+
+			if err := s.executeMethodQR(encoded); err != nil {
+				slog.Error("session: send", "id", s.id, "method", methodQR, "err", err)
+			}
+		}()
+	}
+
+	return nil
+}
+
+func (s *session) executeMethodMessage(encoded string) error {
+	p := messagesSendParams{
+		message: encoded,
+	}
+	_, err := messagesSend(s.cfg, p)
+
+	return err
+}
+
+func (s *session) executeMethodPost(encoded string) error {
+	p := wallPostParams{
+		message: encoded,
+	}
+	resp, err := wallPost(s.cfg, p)
+
 	if err != nil {
-		return fmt.Errorf("encode: %v", err)
+		return err
+	}
+
+	s.mu.Lock()
+	s.post = resp
+	s.mu.Unlock()
+
+	return nil
+}
+
+func (s *session) executeMethodComment(encoded string) error {
+	s.mu.Lock()
+	post := s.post
+	s.mu.Unlock()
+
+	if post.PostID == 0 {
+		return errors.New("post is not created")
+	}
+
+	p := wallCreateCommentParams{
+		postID:  post.PostID,
+		message: encoded,
+	}
+	_, err := wallCreateComment(s.cfg, p)
+
+	return err
+}
+
+func (s *session) executeMethodDoc(encoded string) error {
+	uploadP := docsUploadParams{
+		data: []byte(encoded),
+	}
+	resp, err := docsUploadAndSave(s.cfg, uploadP)
+
+	if err != nil {
+		return err
+	}
+
+	editP := groupsEditParams{
+		website: resp.Doc.URL,
+	}
+	_, err = groupsEdit(s.cfg, editP)
+
+	return err
+}
+
+func (s *session) executeMethodQR(encoded []string) error {
+	qrs := make([][]byte, len(encoded))
+
+	for i, enc := range encoded {
+		qr, err := encodeQR(s.cfg.QR, enc)
+
+		if err != nil {
+			return fmt.Errorf("encode: %v", err)
+		}
+
+		qrs[i] = qr
+	}
+
+	qr, err := mergeQR(s.cfg.QR, qrs)
+
+	if err != nil {
+		return fmt.Errorf("merge: %v", err)
 	}
 
 	p := photosUploadParams{

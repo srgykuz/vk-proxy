@@ -32,6 +32,11 @@ func main() {
 
 	slog.SetLogLoggerLevel(slog.Level(cfg.Log.Level))
 
+	if err := initSession(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, "init session:", err)
+		os.Exit(1)
+	}
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
