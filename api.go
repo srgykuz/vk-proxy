@@ -810,6 +810,7 @@ type photosSaveParams struct {
 	photosList string
 	server     int
 	hash       string
+	caption    string
 }
 
 type photosSaveResult struct {
@@ -829,6 +830,7 @@ func photosSave(cfg config, params photosSaveParams) (photosSaveResponse, error)
 	values.Set("photos_list", params.photosList)
 	values.Set("server", fmt.Sprint(params.server))
 	values.Set("hash", params.hash)
+	values.Set("caption", params.caption)
 
 	uri := apiURL("photos.save", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
@@ -860,27 +862,29 @@ func photosSave(cfg config, params photosSaveParams) (photosSaveResponse, error)
 	return result.Response[0], nil
 }
 
-func photosUploadAndSave(cfg config, params photosUploadParams) (photosSaveResponse, error) {
+type photosUploadAndSaveParams struct {
+	photosUploadParams
+	photosSaveParams
+}
+
+func photosUploadAndSave(cfg config, params photosUploadAndSaveParams) (photosSaveResponse, error) {
 	server, err := photosGetUploadServer(cfg)
 
 	if err != nil {
 		return photosSaveResponse{}, err
 	}
 
-	upload, err := photosUpload(cfg, photosUploadParams{
-		uploadURL: server.UploadURL,
-		data:      params.data,
-	})
+	params.photosUploadParams.uploadURL = server.UploadURL
+	upload, err := photosUpload(cfg, params.photosUploadParams)
 
 	if err != nil {
 		return photosSaveResponse{}, err
 	}
 
-	saved, err := photosSave(cfg, photosSaveParams{
-		photosList: upload.PhotosList,
-		server:     upload.Server,
-		hash:       upload.Hash,
-	})
+	params.photosSaveParams.photosList = upload.PhotosList
+	params.photosSaveParams.server = upload.Server
+	params.photosSaveParams.hash = upload.Hash
+	saved, err := photosSave(cfg, params.photosSaveParams)
 
 	if err != nil {
 		return photosSaveResponse{}, err

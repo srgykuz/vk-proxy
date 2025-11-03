@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/url"
 	"os"
 	"sort"
 	"sync"
@@ -72,9 +73,14 @@ func handleUpdate(cfg config, upd update) error {
 	case updateTypeWallReplyNew:
 		encodedS = upd.Object.Text
 	case updateTypePhotoNew:
-		datagrams, err = handleUpdatePhoto(cfg, upd.Object.OrigPhoto.URL)
+		if shouldHandlePhoto(upd.Object.Text) {
+			datagrams, err = handleUpdatePhoto(cfg, upd.Object.OrigPhoto.URL)
+		}
 	case updateTypeGroupChangeSettings:
-		encodedB, err = apiDownloadURL(cfg, upd.Object.Changes.Website.NewValue)
+		if shouldHandleDoc(upd.Object.Changes.Website.NewValue) {
+			uri := clearDocURL(upd.Object.Changes.Website.NewValue)
+			encodedB, err = apiDownloadURL(cfg, uri)
+		}
 	default:
 		err = errors.New("unsupported update")
 	}
@@ -108,6 +114,57 @@ func handleUpdate(cfg config, upd update) error {
 	}
 
 	return nil
+}
+
+func shouldHandlePhoto(caption string) bool {
+	if len(caption) == 0 {
+		return true
+	}
+
+	dg, err := handleEncoded(caption)
+
+	if err != nil {
+		return true
+	}
+
+	return !dg.isZero()
+}
+
+func shouldHandleDoc(uri string) bool {
+	parsed, err := url.Parse(uri)
+
+	if err != nil {
+		return true
+	}
+
+	caption := parsed.Query().Get("caption")
+
+	if len(caption) == 0 {
+		return true
+	}
+
+	dg, err := handleEncoded(caption)
+
+	if err != nil {
+		return true
+	}
+
+	return !dg.isZero()
+}
+
+func clearDocURL(uri string) string {
+	parsed, err := url.Parse(uri)
+
+	if err != nil {
+		return uri
+	}
+
+	q := parsed.Query()
+	q.Del("caption")
+
+	parsed.RawQuery = q.Encode()
+
+	return parsed.String()
 }
 
 func handleUpdatePhoto(cfg config, url string) ([]datagram, error) {

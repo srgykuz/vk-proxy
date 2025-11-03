@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"math/rand"
 	"net"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -469,8 +471,18 @@ func (s *session) executeMethodDoc(encoded string) error {
 		return err
 	}
 
+	zero := encodeDatagram(newDatagram(0, 0, 0, nil))
+	arg := "caption=" + url.QueryEscape(zero)
+	uri := resp.Doc.URL
+
+	if strings.Contains(uri, "?") {
+		uri += "&" + arg
+	} else {
+		uri += "?" + arg
+	}
+
 	editP := groupsEditParams{
-		website: resp.Doc.URL,
+		website: uri,
 	}
 	_, err = groupsEdit(s.cfg, editP)
 
@@ -496,8 +508,14 @@ func (s *session) executeMethodQR(encoded []string) error {
 		return fmt.Errorf("merge: %v", err)
 	}
 
-	p := photosUploadParams{
-		data: qr,
+	zero := encodeDatagram(newDatagram(0, 0, 0, nil))
+	p := photosUploadAndSaveParams{
+		photosUploadParams: photosUploadParams{
+			data: qr,
+		},
+		photosSaveParams: photosSaveParams{
+			caption: zero,
+		},
 	}
 
 	if _, err := photosUploadAndSave(s.cfg, p); err != nil {
