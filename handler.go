@@ -74,7 +74,7 @@ func handleUpdate(cfg config, upd update) error {
 		encodedS = upd.Object.Text
 	case updateTypePhotoNew:
 		if shouldHandlePhoto(upd.Object.Text) {
-			datagrams, err = handleUpdatePhoto(cfg, upd.Object.OrigPhoto.URL)
+			datagrams, err = handlePhoto(cfg, upd.Object.OrigPhoto.URL)
 		}
 	case updateTypeGroupChangeSettings:
 		if shouldHandleDoc(upd.Object.Changes.Website.NewValue) {
@@ -167,7 +167,7 @@ func clearDocURL(uri string) string {
 	return parsed.String()
 }
 
-func handleUpdatePhoto(cfg config, url string) ([]datagram, error) {
+func handlePhoto(cfg config, url string) ([]datagram, error) {
 	b, err := apiDownloadURL(cfg, url)
 
 	if err != nil {
@@ -269,17 +269,17 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 
 	switch dg.command {
 	case commandConnect:
-		err = handleCommandConnect(cfg, ses, dg)
+		err = handleConnect(cfg, ses, dg)
 
 		if err == nil {
 			slog.Info("handler: forwarding", "ses", ses)
 		}
 	case commandForward:
-		err = handleCommandForward(ses, dg)
+		err = handleForward(ses, dg)
 	case commandClose:
-		handleCommandClose(ses)
+		handleClose(ses)
 	case commandRetry:
-		err = handleCommandRetry(ses, dg)
+		err = handleRetry(ses, dg)
 	default:
 		err = errors.New("unsupported")
 	}
@@ -291,7 +291,7 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 	return nil
 }
 
-func handleCommandConnect(cfg config, ses *session, dg datagram) error {
+func handleConnect(cfg config, ses *session, dg datagram) error {
 	pld := payloadConnect{}
 
 	if err := pld.decode(dg.payload); err != nil {
@@ -313,7 +313,7 @@ func handleCommandConnect(cfg config, ses *session, dg datagram) error {
 	return nil
 }
 
-func handleCommandForward(ses *session, dg datagram) error {
+func handleForward(ses *session, dg datagram) error {
 	if err := ses.writePeer(dg.payload); err != nil {
 		return err
 	}
@@ -321,11 +321,11 @@ func handleCommandForward(ses *session, dg datagram) error {
 	return nil
 }
 
-func handleCommandClose(ses *session) {
+func handleClose(ses *session) {
 	ses.close()
 }
 
-func handleCommandRetry(ses *session, dg datagram) error {
+func handleRetry(ses *session, dg datagram) error {
 	pld := payloadRetry{}
 
 	if err := pld.decode(dg.payload); err != nil {
@@ -436,7 +436,7 @@ func (q *handlerPriorityQueue) listen() {
 
 		if stop {
 			q.send(commandClose, nil)
-			handleCommandClose(q.ses)
+			handleClose(q.ses)
 			return
 		}
 	}
