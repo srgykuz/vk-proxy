@@ -232,6 +232,10 @@ func handleDatagram(cfg config, dg datagram) error {
 
 	ses, exists := getSession(dg.session)
 
+	if exists && ses.isClosed() && dg.command == commandConnect {
+		return errors.New("bidirectional proxying is not supported")
+	}
+
 	if !exists {
 		var err error
 		ses, err = openSession(dg.session, cfg)
