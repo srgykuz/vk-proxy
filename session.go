@@ -498,10 +498,10 @@ func (s *session) executeMethodDoc(encoded string) error {
 		uri += "?" + arg
 	}
 
-	editP := groupsEditParams{
-		website: uri,
+	msgP := messagesSendParams{
+		message: uri,
 	}
-	_, err = groupsEdit(s.cfg, editP)
+	_, err = messagesSend(s.cfg, msgP)
 
 	return err
 }

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -76,13 +77,17 @@ func handleUpdate(cfg config, upd update) error {
 		if shouldHandlePhoto(upd.Object.Text) {
 			datagrams, err = handlePhoto(cfg, upd.Object.OrigPhoto.URL)
 		}
-	case updateTypeGroupChangeSettings:
-		if shouldHandleDoc(upd.Object.Changes.Website.NewValue) {
-			uri := clearDocURL(upd.Object.Changes.Website.NewValue)
-			encodedB, err = apiDownloadURL(cfg, uri)
-		}
 	default:
 		err = errors.New("unsupported update")
+	}
+
+	if strings.HasPrefix(encodedS, "https://") {
+		if shouldHandleDoc(encodedS) {
+			uri := clearDocURL(encodedS)
+			encodedB, err = apiDownloadURL(cfg, uri)
+		}
+
+		encodedS = ""
 	}
 
 	if err != nil {
