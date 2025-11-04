@@ -73,7 +73,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		if err := clearSession(cfg); err != nil {
+		if err := clearSession(); err != nil {
 			fmt.Fprintln(os.Stderr, "clear sessions:", err)
 			os.Exit(1)
 		}

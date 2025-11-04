@@ -542,7 +542,7 @@ func (s *session) executeMethodQR(encoded []string) error {
 	return nil
 }
 
-func clearSession(cfg config) error {
+func clearSession() error {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -573,10 +573,8 @@ func clearSession(cfg config) error {
 	go func() {
 		defer wg.Done()
 
-		interval := cfg.Session.ClearInterval()
-
 		for {
-			time.Sleep(interval)
+			time.Sleep(5 * time.Minute)
 
 			sessionsMu.Lock()
 
