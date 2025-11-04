@@ -16,7 +16,9 @@ import (
 
 const (
 	stageHandshake int = iota + 1
-	stageConnect
+	stageConnectV4
+	stageConnectV5
+	stageConnectSession
 	stageForward
 )
 
@@ -136,32 +138,44 @@ func readSocks(cfg config, ses *session, stage int, fwdBuf opBuffer) error {
 				slog.Debug("socks: payload", "peer", peer, "in", bytesToHex(in))
 			}
 
+			if stage == stageHandshake && in[0] == 0x04 {
+				stage = stageConnectV4
+			}
+
 			var out []byte
 			var err error
+			var addr address
 
 			switch stage {
 			case stageHandshake:
-				out, err = handleSocksStageHandshake(in)
-				stage = stageConnect
-			case stageConnect:
-				var addr address
-				addr, out, err = handleSocksStageConnect(in)
+				out, err = handleSocksStageHandshakeV5(in)
+				stage = stageConnectV5
+			case stageConnectV4:
+				addr, out, err = handleSocksStageConnectV4(in)
 
 				if err == nil {
-					err = handleSocksStageConnectSession(cfg, ses, addr)
+					stage = stageConnectSession
 				}
+			case stageConnectV5:
+				addr, out, err = handleSocksStageConnectV5(in)
+
+				if err == nil {
+					stage = stageConnectSession
+				}
+			}
+
+			switch stage {
+			case stageConnectSession:
+				err = handleSocksStageConnectSession(cfg, ses, addr)
 
 				if err == nil {
 					slog.Info("socks: forwarding", "peer", peer, "ses", ses, "addr", addr)
+					stage = stageForward
 				}
-
-				stage = stageForward
 			case stageForward:
 				fwdBuf.mu.Lock()
 				fwdBuf.b.Write(in)
 				fwdBuf.mu.Unlock()
-			default:
-				err = fmt.Errorf("read: unknown stage: %v", stage)
 			}
 
 			if len(out) > 0 {
@@ -244,13 +258,13 @@ func writeSocks(cfg config, ses *session, out []byte) error {
 	return err
 }
 
-func handleSocksStageHandshake(in []byte) ([]byte, error) {
-	if in[0] != 0x05 {
-		return nil, errUnacceptable
-	}
-
+func handleSocksStageHandshakeV5(in []byte) ([]byte, error) {
 	if len(in) < 2 {
 		return nil, errPartialRead
+	}
+
+	if in[0] != 0x05 {
+		return nil, errUnacceptable
 	}
 
 	nmethods := int(in[1])
@@ -268,13 +282,68 @@ func handleSocksStageHandshake(in []byte) ([]byte, error) {
 	return []byte{0x05, 0xff}, errUnsupported
 }
 
-func handleSocksStageConnect(in []byte) (address, []byte, error) {
-	if in[0] != 0x05 {
+func handleSocksStageConnectV4(in []byte) (address, []byte, error) {
+	if len(in) < 9 {
+		return address{}, nil, errPartialRead
+	}
+
+	vn := in[0]
+
+	if vn != 0x04 {
 		return address{}, nil, errUnacceptable
 	}
 
+	cd := in[1]
+
+	if cd != 0x01 {
+		return address{}, nil, errUnsupported
+	}
+
+	port := binary.BigEndian.Uint16(in[2:4])
+	ip := in[4:8]
+	chars := []rune{}
+
+	if ip[0] == 0x00 && ip[1] == 0x00 && ip[2] == 0x00 && ip[3] != 0x00 {
+		nulls := 0
+
+		for _, b := range in[8:] {
+			if b == 0x00 {
+				nulls++
+				continue
+			}
+
+			if nulls == 1 {
+				chars = append(chars, rune(b))
+			}
+		}
+	}
+
+	addr := address{
+		port: port,
+	}
+
+	if len(chars) > 0 {
+		addr.host = string(chars)
+	} else {
+		addr.host = net.IP(ip).String()
+	}
+
+	out := bytes.Clone(in[:8])
+	out[0] = 0x00
+	out[1] = 0x5a
+
+	return addr, out, nil
+}
+
+func handleSocksStageConnectV5(in []byte) (address, []byte, error) {
 	if len(in) < 5 {
 		return address{}, nil, errPartialRead
+	}
+
+	ver := in[0]
+
+	if ver != 0x05 {
+		return address{}, nil, errUnacceptable
 	}
 
 	cmd := in[1]
