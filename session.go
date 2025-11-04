@@ -91,6 +91,7 @@ type session struct {
 	history   map[dgNum]datagram
 	writes    chan []byte
 	datagrams chan datagram
+	activity  time.Time
 	post      wallPostResponse
 }
 
@@ -109,6 +110,7 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		history:   make(map[dgNum]datagram),
 		writes:    make(chan []byte, cfg.Session.QueueSize),
 		datagrams: make(chan datagram, cfg.Session.QueueSize),
+		activity:  time.Now(),
 		post:      wallPostResponse{},
 	}
 
@@ -172,6 +174,17 @@ func (s *session) isClosed() bool {
 	return s.closed
 }
 
+func (s *session) isInactive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return false
+	}
+
+	return time.Since(s.activity) > s.cfg.Session.Timeout()
+}
+
 func (s *session) nextNumber() dgNum {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -211,6 +224,8 @@ func (s *session) writePeer(b []byte) error {
 		return errors.New("peer is nil")
 	}
 
+	s.activity = time.Now()
+
 	select {
 	case s.writes <- clone:
 		return nil
@@ -240,6 +255,8 @@ func (s *session) sendDatagram(dg datagram) error {
 	if clone.session == 0 {
 		clone.session = s.id
 	}
+
+	s.activity = time.Now()
 
 	select {
 	case s.datagrams <- clone:
@@ -526,19 +543,54 @@ func (s *session) executeMethodQR(encoded []string) error {
 }
 
 func clearSession(cfg config) error {
-	interval := cfg.Session.ClearInterval()
+	var wg sync.WaitGroup
 
-	for {
-		time.Sleep(interval)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 
-		sessionsMu.Lock()
+		for {
+			time.Sleep(10 * time.Second)
 
-		for id, ses := range sessions {
-			if ses.isClosed() {
-				delete(sessions, id)
+			sessionsMu.Lock()
+
+			for id, ses := range sessions {
+				if ses.isInactive() {
+					slog.Error("session: timeout", "id", id)
+
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						ses.close()
+					}()
+				}
 			}
-		}
 
-		sessionsMu.Unlock()
-	}
+			sessionsMu.Unlock()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		interval := cfg.Session.ClearInterval()
+
+		for {
+			time.Sleep(interval)
+
+			sessionsMu.Lock()
+
+			for id, ses := range sessions {
+				if ses.isClosed() {
+					delete(sessions, id)
+				}
+			}
+
+			sessionsMu.Unlock()
+		}
+	}()
+
+	wg.Wait()
+
+	return nil
 }
