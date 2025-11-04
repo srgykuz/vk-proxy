@@ -301,9 +301,15 @@ func handleCommand(cfg config, ses *session, dg datagram) error {
 }
 
 func handleConnect(cfg config, ses *session, dg datagram) error {
+	decrypted, err := decrypt(dg.payload, cfg.Session.SecretKey)
+
+	if err != nil {
+		return err
+	}
+
 	pld := payloadConnect{}
 
-	if err := pld.decode(dg.payload); err != nil {
+	if err := pld.decode(decrypted); err != nil {
 		return err
 	}
 

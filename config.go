@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 )
@@ -21,8 +22,10 @@ type configLog struct {
 }
 
 type configSession struct {
-	QueueSize int `json:"queueSize"`
-	TimeoutMS int `json:"timeout"`
+	QueueSize int    `json:"queueSize"`
+	TimeoutMS int    `json:"timeout"`
+	Secret    string `json:"secret"`
+	SecretKey []byte
 }
 
 func (cfg configSession) Timeout() time.Duration {
@@ -131,6 +134,16 @@ func parseConfig(name string) (config, error) {
 		return config{}, err
 	}
 
+	if len(cfg.Session.Secret) > 0 {
+		key, err := hexToKey(cfg.Session.Secret)
+
+		if err != nil {
+			return config{}, fmt.Errorf("secret to key: %v", err)
+		}
+
+		cfg.Session.SecretKey = key
+	}
+
 	return cfg, nil
 }
 
@@ -153,6 +166,10 @@ func validateConfig(cfg config) error {
 
 	if cfg.API.AlbumID == "" {
 		return errors.New("api.albumID is missing")
+	}
+
+	if len(cfg.Session.SecretKey) == 0 {
+		return errors.New("session.secret is missing")
 	}
 
 	return nil

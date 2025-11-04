@@ -148,7 +148,7 @@ func readSocks(cfg config, ses *session, stage int, fwdBuf opBuffer) error {
 				addr, out, err = handleSocksStageConnect(in)
 
 				if err == nil {
-					err = handleSocksStageConnectSession(ses, addr)
+					err = handleSocksStageConnectSession(cfg, ses, addr)
 				}
 
 				if err == nil {
@@ -324,10 +324,16 @@ func handleSocksStageConnect(in []byte) (address, []byte, error) {
 	return dst, out, nil
 }
 
-func handleSocksStageConnectSession(ses *session, addr address) error {
+func handleSocksStageConnectSession(cfg config, ses *session, addr address) error {
 	pld := payloadConnect(addr)
-	pldb := pld.encode()
-	dg := newDatagram(0, 0, commandConnect, pldb)
+	encoded := pld.encode()
+	encrypted, err := encrypt(encoded, cfg.Session.SecretKey)
+
+	if err != nil {
+		return err
+	}
+
+	dg := newDatagram(0, 0, commandConnect, encrypted)
 
 	if err := ses.sendDatagram(dg); err != nil {
 		return err
