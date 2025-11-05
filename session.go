@@ -498,6 +498,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 		uri += "?" + arg
 	}
 
+	uri = strings.ReplaceAll(uri, ".", ". ")
+
 	msgP := messagesSendParams{
 		message: uri,
 	}

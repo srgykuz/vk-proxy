@@ -82,6 +82,8 @@ func handleUpdate(cfg config, upd update) error {
 	}
 
 	if strings.HasPrefix(encodedS, "https://") {
+		encodedS = strings.ReplaceAll(encodedS, ". ", ".")
+
 		if shouldHandleDoc(encodedS) {
 			uri := clearDocURL(encodedS)
 			encodedB, err = apiDownloadURL(cfg, uri)
