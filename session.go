@@ -404,13 +404,13 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 		slog.Debug("session: send", "id", s.id, "method", method, "dg", fg)
 
 		s.wg.Add(1)
-		go func() {
+		go func(method int) {
 			defer s.wg.Done()
 
 			if err := f(encoded); err != nil {
 				slog.Error("session: send", "id", s.id, "method", method, "dg", fg, "err", err)
 			}
-		}()
+		}(method)
 	}
 
 	if len(qrs) > 0 {
@@ -560,10 +560,10 @@ func clearSession() error {
 					slog.Error("session: timeout", "id", id)
 
 					wg.Add(1)
-					go func() {
+					go func(ses *session) {
 						defer wg.Done()
 						ses.close()
-					}()
+					}(ses)
 				}
 			}
 

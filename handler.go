@@ -51,11 +51,11 @@ func listenLongPoll(cfg config) error {
 		}
 
 		for _, upd := range last.Updates {
-			go func() {
+			go func(upd update) {
 				if err := handleUpdate(cfg, upd); err != nil {
 					slog.Error("handler: update", "type", upd.Type, "err", err)
 				}
-			}()
+			}(upd)
 		}
 	}
 }
