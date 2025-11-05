@@ -232,7 +232,7 @@ func handleEncoded(s string) (datagram, error) {
 	return dg, nil
 }
 
-var handleDatagramMu *sync.Mutex = &sync.Mutex{}
+var handleDatagramMu sync.Mutex = sync.Mutex{}
 var handleDatagramQueues map[dgSes]*handlerPriorityQueue = map[dgSes]*handlerPriorityQueue{}
 
 func handleDatagram(cfg config, dg datagram) error {
@@ -532,10 +532,8 @@ func (q *handlerPriorityQueue) send(cmd dgCmd, pld []byte) {
 }
 
 func clearHandler() error {
-	interval := 5 * time.Minute
-
 	for {
-		time.Sleep(interval)
+		time.Sleep(5 * time.Minute)
 
 		handleDatagramMu.Lock()
 
