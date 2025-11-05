@@ -49,7 +49,7 @@ func initSession(cfg config) error {
 }
 
 var sessions map[dgSes]*session = map[dgSes]*session{}
-var sessionsMu *sync.Mutex = &sync.Mutex{}
+var sessionsMu sync.Mutex = sync.Mutex{}
 
 func getSession(id dgSes) (*session, bool) {
 	sessionsMu.Lock()
@@ -68,7 +68,7 @@ func setSession(id dgSes, ses *session) {
 }
 
 var sessionID dgSes = 0
-var sessionIDMu *sync.Mutex = &sync.Mutex{}
+var sessionIDMu sync.Mutex = sync.Mutex{}
 
 func nextSessionID() dgSes {
 	sessionIDMu.Lock()
@@ -498,10 +498,9 @@ func (s *session) executeMethodDoc(encoded string) error {
 		uri += "?" + arg
 	}
 
-	uri = strings.ReplaceAll(uri, ".", ". ")
-
+	msg := strings.ReplaceAll(uri, ".", ". ")
 	msgP := messagesSendParams{
-		message: uri,
+		message: msg,
 	}
 	_, err = messagesSend(s.cfg.API, msgP)
 
