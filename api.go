@@ -177,80 +177,6 @@ func messagesSend(cfg config, params messagesSendParams) (int, error) {
 	return result.Response, nil
 }
 
-type messagesGetHistoryParams struct {
-	offset int
-	count  int
-	rev    int
-}
-
-type messagesGetHistoryResult struct {
-	Error    errorResult                `json:"error"`
-	Response messagesGetHistoryResponse `json:"response"`
-}
-
-type messagesGetHistoryResponse struct {
-	Count int       `json:"count"`
-	Items []message `json:"items"`
-}
-
-type message struct {
-	ID   int    `json:"id"`
-	Text string `json:"text"`
-}
-
-func messagesGetHistory(cfg config, params messagesGetHistoryParams) (messagesGetHistoryResponse, error) {
-	values := apiValues(cfg.API.ClubAccessToken)
-
-	values.Set("user_id", cfg.API.UserID)
-	values.Set("offset", fmt.Sprint(params.offset))
-	values.Set("count", fmt.Sprint(params.count))
-	values.Set("rev", fmt.Sprint(params.rev))
-
-	uri := apiURL("messages.getHistory", values)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
-
-	if err != nil {
-		return messagesGetHistoryResponse{}, err
-	}
-
-	data, err := apiDo(cfg, req)
-
-	if err != nil {
-		return messagesGetHistoryResponse{}, err
-	}
-
-	result := messagesGetHistoryResult{}
-
-	if err := json.Unmarshal(data, &result); err != nil {
-		return messagesGetHistoryResponse{}, err
-	}
-
-	if err := result.Error.check(); err != nil {
-		return messagesGetHistoryResponse{}, err
-	}
-
-	return result.Response, nil
-}
-
-func messagesGetLatest(cfg config) (message, error) {
-	p := messagesGetHistoryParams{
-		offset: 0,
-		count:  1,
-		rev:    0,
-	}
-	resp, err := messagesGetHistory(cfg, p)
-
-	if err != nil {
-		return message{}, err
-	}
-
-	if len(resp.Items) == 0 {
-		return message{}, fmt.Errorf("chat is empty")
-	}
-
-	return resp.Items[0], nil
-}
-
 type groupsGetLongPollServerResult struct {
 	Error    errorResult                     `json:"error"`
 	Response groupsGetLongPollServerResponse `json:"response"`
@@ -661,50 +587,6 @@ func docsUploadAndSave(cfg config, params docsUploadParams) (docsSaveResponse, e
 	}
 
 	return saved, nil
-}
-
-type groupsEditParams struct {
-	website string
-}
-
-type groupsEditResult struct {
-	Error    errorResult `json:"error"`
-	Response int         `json:"response"`
-}
-
-func groupsEdit(cfg config, params groupsEditParams) (int, error) {
-	values := apiValues(cfg.API.ClubAccessToken)
-
-	values.Set("group_id", cfg.API.ClubID)
-
-	if len(params.website) > 0 {
-		values.Set("website", params.website)
-	}
-
-	uri := apiURL("groups.edit", values)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
-
-	if err != nil {
-		return 0, err
-	}
-
-	data, err := apiDo(cfg, req)
-
-	if err != nil {
-		return 0, err
-	}
-
-	result := groupsEditResult{}
-
-	if err := json.Unmarshal(data, &result); err != nil {
-		return 0, err
-	}
-
-	if err := result.Error.check(); err != nil {
-		return 0, err
-	}
-
-	return result.Response, nil
 }
 
 type photosGetUploadServerResult struct {
