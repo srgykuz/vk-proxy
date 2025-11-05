@@ -14,7 +14,7 @@ import (
 )
 
 func listenLongPoll(cfg config) error {
-	server, err := groupsGetLongPollServer(cfg)
+	server, err := groupsGetLongPollServer(cfg.API)
 
 	if err != nil {
 		return err
@@ -27,7 +27,7 @@ func listenLongPoll(cfg config) error {
 	slog.Info("long poll: listening")
 
 	for {
-		last, err = groupsUseLongPollServer(cfg, server, last)
+		last, err = groupsUseLongPollServer(cfg.API, server, last)
 
 		if err != nil {
 			slog.Error("long poll: listen", "err", err)
@@ -37,7 +37,7 @@ func listenLongPoll(cfg config) error {
 		if last.Failed != 0 {
 			slog.Debug("long poll: refresh")
 
-			server, err = groupsGetLongPollServer(cfg)
+			server, err = groupsGetLongPollServer(cfg.API)
 
 			if err == nil {
 				last = groupsUseLongPollServerResponse{
@@ -88,7 +88,7 @@ func handleUpdate(cfg config, upd update) error {
 
 		if shouldHandleDoc(encodedS) {
 			uri := clearDocURL(encodedS)
-			encodedB, err = apiDownloadURL(cfg, uri)
+			encodedB, err = apiDownloadURL(cfg.API, uri)
 		}
 
 		encodedS = ""
@@ -177,7 +177,7 @@ func clearDocURL(uri string) string {
 }
 
 func handlePhoto(cfg config, url string) ([]datagram, error) {
-	b, err := apiDownloadURL(cfg, url)
+	b, err := apiDownloadURL(cfg.API, url)
 
 	if err != nil {
 		return nil, fmt.Errorf("download url: %v", err)

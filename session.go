@@ -438,7 +438,7 @@ func (s *session) executeMethodMessage(encoded string) error {
 	p := messagesSendParams{
 		message: encoded,
 	}
-	_, err := messagesSend(s.cfg, p)
+	_, err := messagesSend(s.cfg.API, p)
 
 	return err
 }
@@ -447,7 +447,7 @@ func (s *session) executeMethodPost(encoded string) error {
 	p := wallPostParams{
 		message: encoded,
 	}
-	resp, err := wallPost(s.cfg, p)
+	resp, err := wallPost(s.cfg.API, p)
 
 	if err != nil {
 		return err
@@ -473,7 +473,7 @@ func (s *session) executeMethodComment(encoded string) error {
 		postID:  post.PostID,
 		message: encoded,
 	}
-	_, err := wallCreateComment(s.cfg, p)
+	_, err := wallCreateComment(s.cfg.API, p)
 
 	return err
 }
@@ -482,7 +482,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	uploadP := docsUploadParams{
 		data: []byte(encoded),
 	}
-	resp, err := docsUploadAndSave(s.cfg, uploadP)
+	resp, err := docsUploadAndSave(s.cfg.API, uploadP)
 
 	if err != nil {
 		return err
@@ -503,7 +503,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	msgP := messagesSendParams{
 		message: uri,
 	}
-	_, err = messagesSend(s.cfg, msgP)
+	_, err = messagesSend(s.cfg.API, msgP)
 
 	return err
 }
@@ -537,7 +537,7 @@ func (s *session) executeMethodQR(encoded []string) error {
 		},
 	}
 
-	if _, err := photosUploadAndSave(s.cfg, p); err != nil {
+	if _, err := photosUploadAndSave(s.cfg.API, p); err != nil {
 		return fmt.Errorf("upload: %v", err)
 	}
 

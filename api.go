@@ -56,31 +56,45 @@ func apiForm(fields map[string]string, files map[string][]byte) (io.Reader, stri
 	return body, writer.FormDataContentType(), nil
 }
 
-func apiDo(cfg config, req *http.Request) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(req.Context(), cfg.API.Timeout())
+func apiDo(cfg configAPI, req *http.Request) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(req.Context(), cfg.Timeout())
 	defer cancel()
 
 	req = req.WithContext(ctx)
 	resp, err := http.DefaultClient.Do(req)
+
+	method := strings.TrimPrefix(req.URL.Path, "/method/")
 
 	if err != nil {
 		if e, ok := err.(*url.Error); ok {
 			e.URL = req.URL.Path
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("%v: %v", method, err)
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %v", resp.StatusCode)
+		return nil, fmt.Errorf("%v: HTTP %v", method, resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		return nil, fmt.Errorf("read response: %v", err)
+		return nil, fmt.Errorf("%v: read: %v", method, err)
+	}
+
+	if strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
+		result := errorResult{}
+
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, fmt.Errorf("%v: %v", method, err)
+		}
+
+		if err := result.Error.check(); err != nil {
+			return nil, fmt.Errorf("%v: %v", method, err)
+		}
 	}
 
 	return data, nil
@@ -90,7 +104,7 @@ type apiDownloadParams struct {
 	url string
 }
 
-func apiDownload(cfg config, params apiDownloadParams) ([]byte, error) {
+func apiDownload(cfg configAPI, params apiDownloadParams) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, params.url, nil)
 
 	if err != nil {
@@ -106,7 +120,7 @@ func apiDownload(cfg config, params apiDownloadParams) ([]byte, error) {
 	return data, nil
 }
 
-func apiDownloadURL(cfg config, uri string) ([]byte, error) {
+func apiDownloadURL(cfg configAPI, uri string) ([]byte, error) {
 	p := apiDownloadParams{
 		url: uri,
 	}
@@ -115,11 +129,15 @@ func apiDownloadURL(cfg config, uri string) ([]byte, error) {
 }
 
 type errorResult struct {
+	Error errorResponse `json:"error"`
+}
+
+type errorResponse struct {
 	ErrorCode int    `json:"error_code"`
 	ErrorMsg  string `json:"error_msg"`
 }
 
-func (r errorResult) check() error {
+func (r errorResponse) check() error {
 	if r.ErrorCode != 0 {
 		return fmt.Errorf("code %d: %s", r.ErrorCode, r.ErrorMsg)
 	}
@@ -132,13 +150,12 @@ type messagesSendParams struct {
 }
 
 type messagesSendResult struct {
-	Error    errorResult `json:"error"`
-	Response int         `json:"response"`
+	Response int `json:"response"`
 }
 
-func messagesSend(cfg config, params messagesSendParams) (int, error) {
+func messagesSend(cfg configAPI, params messagesSendParams) (int, error) {
 	form := map[string]string{
-		"user_id":   cfg.API.UserID,
+		"user_id":   cfg.UserID,
 		"random_id": "0",
 		"message":   params.message,
 	}
@@ -148,7 +165,7 @@ func messagesSend(cfg config, params messagesSendParams) (int, error) {
 		return 0, err
 	}
 
-	values := apiValues(cfg.API.ClubAccessToken)
+	values := apiValues(cfg.ClubAccessToken)
 	uri := apiURL("messages.send", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
@@ -170,15 +187,10 @@ func messagesSend(cfg config, params messagesSendParams) (int, error) {
 		return 0, err
 	}
 
-	if err := result.Error.check(); err != nil {
-		return 0, err
-	}
-
 	return result.Response, nil
 }
 
 type groupsGetLongPollServerResult struct {
-	Error    errorResult                     `json:"error"`
 	Response groupsGetLongPollServerResponse `json:"response"`
 }
 
@@ -188,10 +200,10 @@ type groupsGetLongPollServerResponse struct {
 	TS     json.Number `json:"ts"`
 }
 
-func groupsGetLongPollServer(cfg config) (groupsGetLongPollServerResponse, error) {
-	values := apiValues(cfg.API.ClubAccessToken)
+func groupsGetLongPollServer(cfg configAPI) (groupsGetLongPollServerResponse, error) {
+	values := apiValues(cfg.ClubAccessToken)
 
-	values.Set("group_id", cfg.API.ClubID)
+	values.Set("group_id", cfg.ClubID)
 
 	uri := apiURL("groups.getLongPollServer", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
@@ -212,10 +224,6 @@ func groupsGetLongPollServer(cfg config) (groupsGetLongPollServerResponse, error
 		return groupsGetLongPollServerResponse{}, err
 	}
 
-	if err := result.Error.check(); err != nil {
-		return groupsGetLongPollServerResponse{}, err
-	}
-
 	return result.Response, nil
 }
 
@@ -230,7 +238,6 @@ const (
 	updateTypeWallPostNew
 	updateTypeWallReplyNew
 	updateTypePhotoNew
-	updateTypeGroupChangeSettings
 )
 
 type update struct {
@@ -251,35 +258,23 @@ func (u update) TypeEnum() int {
 		return updateTypeWallReplyNew
 	case "photo_new":
 		return updateTypePhotoNew
-	case "group_change_settings":
-		return updateTypeGroupChangeSettings
 	default:
 		return 0
 	}
 }
 
 type updateObject struct {
-	ID        int           `json:"id"`
-	Date      int           `json:"date"`
-	Text      string        `json:"text"`
-	Changes   updateChanges `json:"changes"`
-	OrigPhoto updatePhoto   `json:"orig_photo"`
-}
-
-type updateChanges struct {
-	Website updateValueChangeString `json:"website"`
-}
-
-type updateValueChangeString struct {
-	OldValue string `json:"old_value"`
-	NewValue string `json:"new_value"`
+	ID        int         `json:"id"`
+	Date      int         `json:"date"`
+	Text      string      `json:"text"`
+	OrigPhoto updatePhoto `json:"orig_photo"`
 }
 
 type updatePhoto struct {
 	URL string `json:"url"`
 }
 
-func groupsUseLongPollServer(cfg config, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {
+func groupsUseLongPollServer(cfg configAPI, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {
 	values := url.Values{}
 
 	values.Set("act", "a_check")
@@ -287,7 +282,7 @@ func groupsUseLongPollServer(cfg config, server groupsGetLongPollServerResponse,
 	values.Set("ts", last.TS.String())
 	values.Set("wait", "25")
 
-	cfg.API.TimeoutMS = 30 * 1000
+	cfg.TimeoutMS = 30 * 1000
 	uri := fmt.Sprintf("%v?%v", server.Server, values.Encode())
 
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
@@ -316,7 +311,6 @@ type wallPostParams struct {
 }
 
 type wallPostResult struct {
-	Error    errorResult      `json:"error"`
 	Response wallPostResponse `json:"response"`
 }
 
@@ -324,9 +318,9 @@ type wallPostResponse struct {
 	PostID int `json:"post_id"`
 }
 
-func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
+func wallPost(cfg configAPI, params wallPostParams) (wallPostResponse, error) {
 	form := map[string]string{
-		"owner_id": "-" + cfg.API.ClubID,
+		"owner_id": "-" + cfg.ClubID,
 		"message":  params.message,
 	}
 	body, ct, err := apiForm(form, nil)
@@ -335,7 +329,7 @@ func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
 		return wallPostResponse{}, err
 	}
 
-	values := apiValues(cfg.API.ClubAccessToken)
+	values := apiValues(cfg.ClubAccessToken)
 	uri := apiURL("wall.post", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
@@ -357,10 +351,6 @@ func wallPost(cfg config, params wallPostParams) (wallPostResponse, error) {
 		return wallPostResponse{}, err
 	}
 
-	if err := result.Error.check(); err != nil {
-		return wallPostResponse{}, err
-	}
-
 	return result.Response, nil
 }
 
@@ -370,7 +360,6 @@ type wallCreateCommentParams struct {
 }
 
 type wallCreateCommentResult struct {
-	Error    errorResult               `json:"error"`
 	Response wallCreateCommentResponse `json:"response"`
 }
 
@@ -378,9 +367,9 @@ type wallCreateCommentResponse struct {
 	CommentID int `json:"comment_id"`
 }
 
-func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCommentResponse, error) {
+func wallCreateComment(cfg configAPI, params wallCreateCommentParams) (wallCreateCommentResponse, error) {
 	form := map[string]string{
-		"owner_id": "-" + cfg.API.ClubID,
+		"owner_id": "-" + cfg.ClubID,
 		"post_id":  fmt.Sprint(params.postID),
 		"message":  params.message,
 	}
@@ -390,7 +379,7 @@ func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCo
 		return wallCreateCommentResponse{}, err
 	}
 
-	values := apiValues(cfg.API.ClubAccessToken)
+	values := apiValues(cfg.ClubAccessToken)
 	uri := apiURL("wall.createComment", values)
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
@@ -412,15 +401,10 @@ func wallCreateComment(cfg config, params wallCreateCommentParams) (wallCreateCo
 		return wallCreateCommentResponse{}, err
 	}
 
-	if err := result.Error.check(); err != nil {
-		return wallCreateCommentResponse{}, err
-	}
-
 	return result.Response, nil
 }
 
 type docsGetWallUploadServerResult struct {
-	Error    errorResult                     `json:"error"`
 	Response docsGetWallUploadServerResponse `json:"response"`
 }
 
@@ -428,10 +412,10 @@ type docsGetWallUploadServerResponse struct {
 	UploadURL string `json:"upload_url"`
 }
 
-func docsGetWallUploadServer(cfg config) (docsGetWallUploadServerResponse, error) {
-	values := apiValues(cfg.API.ClubAccessToken)
+func docsGetWallUploadServer(cfg configAPI) (docsGetWallUploadServerResponse, error) {
+	values := apiValues(cfg.ClubAccessToken)
 
-	values.Set("group_id", cfg.API.ClubID)
+	values.Set("group_id", cfg.ClubID)
 
 	uri := apiURL("docs.getWallUploadServer", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
@@ -449,10 +433,6 @@ func docsGetWallUploadServer(cfg config) (docsGetWallUploadServerResponse, error
 	result := docsGetWallUploadServerResult{}
 
 	if err := json.Unmarshal(data, &result); err != nil {
-		return docsGetWallUploadServerResponse{}, err
-	}
-
-	if err := result.Error.check(); err != nil {
 		return docsGetWallUploadServerResponse{}, err
 	}
 
@@ -474,7 +454,7 @@ type docsUploadResponse struct {
 	File string `json:"file"`
 }
 
-func docsUpload(cfg config, params docsUploadParams) (docsUploadResponse, error) {
+func docsUpload(cfg configAPI, params docsUploadParams) (docsUploadResponse, error) {
 	files := map[string][]byte{
 		"file.txt": params.data,
 	}
@@ -505,7 +485,7 @@ func docsUpload(cfg config, params docsUploadParams) (docsUploadResponse, error)
 	}
 
 	if len(result.Error) > 0 {
-		return docsUploadResponse{}, errors.New(result.Error)
+		return docsUploadResponse{}, fmt.Errorf("docs.upload: %v", result.Error)
 	}
 
 	return result.docsUploadResponse, nil
@@ -516,7 +496,6 @@ type docsSaveParams struct {
 }
 
 type docsSaveResult struct {
-	Error    errorResult      `json:"error"`
 	Response docsSaveResponse `json:"response"`
 }
 
@@ -531,8 +510,8 @@ type document struct {
 	URL  string `json:"url"`
 }
 
-func docsSave(cfg config, params docsSaveParams) (docsSaveResponse, error) {
-	values := apiValues(cfg.API.ClubAccessToken)
+func docsSave(cfg configAPI, params docsSaveParams) (docsSaveResponse, error) {
+	values := apiValues(cfg.ClubAccessToken)
 
 	values.Set("file", params.file)
 
@@ -555,14 +534,10 @@ func docsSave(cfg config, params docsSaveParams) (docsSaveResponse, error) {
 		return docsSaveResponse{}, err
 	}
 
-	if err := result.Error.check(); err != nil {
-		return docsSaveResponse{}, err
-	}
-
 	return result.Response, nil
 }
 
-func docsUploadAndSave(cfg config, params docsUploadParams) (docsSaveResponse, error) {
+func docsUploadAndSave(cfg configAPI, params docsUploadParams) (docsSaveResponse, error) {
 	server, err := docsGetWallUploadServer(cfg)
 
 	if err != nil {
@@ -590,7 +565,6 @@ func docsUploadAndSave(cfg config, params docsUploadParams) (docsSaveResponse, e
 }
 
 type photosGetUploadServerResult struct {
-	Error    errorResult                   `json:"error"`
 	Response photosGetUploadServerResponse `json:"response"`
 }
 
@@ -598,11 +572,11 @@ type photosGetUploadServerResponse struct {
 	UploadURL string `json:"upload_url"`
 }
 
-func photosGetUploadServer(cfg config) (photosGetUploadServerResponse, error) {
-	values := apiValues(cfg.API.UserAccessToken)
+func photosGetUploadServer(cfg configAPI) (photosGetUploadServerResponse, error) {
+	values := apiValues(cfg.UserAccessToken)
 
-	values.Set("group_id", cfg.API.ClubID)
-	values.Set("album_id", cfg.API.AlbumID)
+	values.Set("group_id", cfg.ClubID)
+	values.Set("album_id", cfg.AlbumID)
 
 	uri := apiURL("photos.getUploadServer", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
@@ -620,10 +594,6 @@ func photosGetUploadServer(cfg config) (photosGetUploadServerResponse, error) {
 	result := photosGetUploadServerResult{}
 
 	if err := json.Unmarshal(data, &result); err != nil {
-		return photosGetUploadServerResponse{}, err
-	}
-
-	if err := result.Error.check(); err != nil {
 		return photosGetUploadServerResponse{}, err
 	}
 
@@ -647,7 +617,7 @@ type photosUploadResponse struct {
 	Hash       string `json:"hash"`
 }
 
-func photosUpload(cfg config, params photosUploadParams) (photosUploadResponse, error) {
+func photosUpload(cfg configAPI, params photosUploadParams) (photosUploadResponse, error) {
 	files := map[string][]byte{
 		"file1.png": params.data,
 	}
@@ -678,11 +648,11 @@ func photosUpload(cfg config, params photosUploadParams) (photosUploadResponse, 
 	}
 
 	if len(result.Error) > 0 {
-		return photosUploadResponse{}, errors.New(result.Error)
+		return photosUploadResponse{}, fmt.Errorf("photos.upload: %v", result.Error)
 	}
 
 	if result.PhotosList == "" || result.PhotosList == "[]" {
-		return photosUploadResponse{}, errors.New("not uploaded")
+		return photosUploadResponse{}, errors.New("photos.upload: not uploaded")
 	}
 
 	return result.photosUploadResponse, nil
@@ -696,7 +666,6 @@ type photosSaveParams struct {
 }
 
 type photosSaveResult struct {
-	Error    errorResult          `json:"error"`
 	Response []photosSaveResponse `json:"response"`
 }
 
@@ -704,11 +673,11 @@ type photosSaveResponse struct {
 	ID int `json:"id"`
 }
 
-func photosSave(cfg config, params photosSaveParams) (photosSaveResponse, error) {
-	values := apiValues(cfg.API.UserAccessToken)
+func photosSave(cfg configAPI, params photosSaveParams) (photosSaveResponse, error) {
+	values := apiValues(cfg.UserAccessToken)
 
-	values.Set("group_id", cfg.API.ClubID)
-	values.Set("album_id", cfg.API.AlbumID)
+	values.Set("group_id", cfg.ClubID)
+	values.Set("album_id", cfg.AlbumID)
 	values.Set("photos_list", params.photosList)
 	values.Set("server", fmt.Sprint(params.server))
 	values.Set("hash", params.hash)
@@ -733,12 +702,8 @@ func photosSave(cfg config, params photosSaveParams) (photosSaveResponse, error)
 		return photosSaveResponse{}, err
 	}
 
-	if err := result.Error.check(); err != nil {
-		return photosSaveResponse{}, err
-	}
-
 	if len(result.Response) == 0 {
-		return photosSaveResponse{}, errors.New("empty response")
+		return photosSaveResponse{}, errors.New("photos.save: empty response")
 	}
 
 	return result.Response[0], nil
@@ -749,7 +714,7 @@ type photosUploadAndSaveParams struct {
 	photosSaveParams
 }
 
-func photosUploadAndSave(cfg config, params photosUploadAndSaveParams) (photosSaveResponse, error) {
+func photosUploadAndSave(cfg configAPI, params photosUploadAndSaveParams) (photosSaveResponse, error) {
 	server, err := photosGetUploadServer(cfg)
 
 	if err != nil {
