@@ -74,7 +74,9 @@ func handleUpdate(cfg config, upd update) error {
 	case updateTypeWallReplyNew:
 		encodedS = upd.Object.Text
 	case updateTypePhotoNew:
-		if shouldHandlePhoto(upd.Object.Text) {
+		if strings.HasPrefix(upd.Object.Text, "https://") {
+			encodedS = upd.Object.Text
+		} else if shouldHandlePhoto(upd.Object.Text) {
 			datagrams, err = handlePhoto(cfg, upd.Object.OrigPhoto.URL)
 		}
 	default:
