@@ -75,8 +75,8 @@ func acceptSocks(cfg config, ses *session, stage int) {
 }
 
 type opBuffer struct {
-	b    *bytes.Buffer
-	mu   *sync.Mutex
+	b    bytes.Buffer
+	mu   sync.Mutex
 	done chan struct{}
 }
 
@@ -84,9 +84,9 @@ func handleSocks(cfg config, ses *session, stage int) error {
 	var wg sync.WaitGroup
 	var readErr error
 	var fwdErr error
-	fwdBuf := opBuffer{
-		b:    &bytes.Buffer{},
-		mu:   &sync.Mutex{},
+	fwdBuf := &opBuffer{
+		b:    bytes.Buffer{},
+		mu:   sync.Mutex{},
 		done: make(chan struct{}),
 	}
 
@@ -116,7 +116,7 @@ func handleSocks(cfg config, ses *session, stage int) error {
 	return err
 }
 
-func readSocks(cfg config, ses *session, stage int, fwdBuf opBuffer) error {
+func readSocks(cfg config, ses *session, stage int, fwdBuf *opBuffer) error {
 	peer := ses.peer.RemoteAddr().String()
 	temp := make([]byte, cfg.Socks.ReadSize)
 
@@ -148,16 +148,16 @@ func readSocks(cfg config, ses *session, stage int, fwdBuf opBuffer) error {
 
 			switch stage {
 			case stageHandshake:
-				out, err = handleSocksStageHandshakeV5(in)
+				out, err = handleStageHandshakeV5(in)
 				stage = stageConnectV5
 			case stageConnectV4:
-				addr, out, err = handleSocksStageConnectV4(in)
+				addr, out, err = handleStageConnectV4(in)
 
 				if err == nil {
 					stage = stageConnectSession
 				}
 			case stageConnectV5:
-				addr, out, err = handleSocksStageConnectV5(in)
+				addr, out, err = handleStageConnectV5(in)
 
 				if err == nil {
 					stage = stageConnectSession
@@ -166,7 +166,7 @@ func readSocks(cfg config, ses *session, stage int, fwdBuf opBuffer) error {
 
 			switch stage {
 			case stageConnectSession:
-				err = handleSocksStageConnectSession(cfg, ses, addr)
+				err = handleStageConnectSession(cfg, ses, addr)
 
 				if err == nil {
 					slog.Info("socks: forwarding", "peer", peer, "ses", ses, "addr", addr)
@@ -199,7 +199,7 @@ func readSocks(cfg config, ses *session, stage int, fwdBuf opBuffer) error {
 	}
 }
 
-func forwardsSocks(cfg config, ses *session, buf opBuffer) error {
+func forwardsSocks(cfg config, ses *session, buf *opBuffer) error {
 	interval := cfg.Socks.ForwardInterval()
 
 	for {
@@ -216,7 +216,7 @@ func forwardsSocks(cfg config, ses *session, buf opBuffer) error {
 		buf.mu.Lock()
 
 		if buf.b.Len() > 0 {
-			in = buf.b.Bytes()
+			in = bytes.Clone(buf.b.Bytes())
 			buf.b.Reset()
 		}
 
@@ -225,7 +225,7 @@ func forwardsSocks(cfg config, ses *session, buf opBuffer) error {
 		if len(in) > 0 {
 			slog.Debug("socks: forward", "ses", ses, "len", len(in))
 
-			err := handleSocksStageForward(ses, in, cfg.Socks.ForwardSize)
+			err := handleStageForward(ses, in, cfg.Socks.ForwardSize)
 
 			if err != nil {
 				return err
@@ -258,7 +258,7 @@ func writeSocks(cfg config, ses *session, out []byte) error {
 	return err
 }
 
-func handleSocksStageHandshakeV5(in []byte) ([]byte, error) {
+func handleStageHandshakeV5(in []byte) ([]byte, error) {
 	if len(in) < 2 {
 		return nil, errPartialRead
 	}
@@ -282,7 +282,7 @@ func handleSocksStageHandshakeV5(in []byte) ([]byte, error) {
 	return []byte{0x05, 0xff}, errUnsupported
 }
 
-func handleSocksStageConnectV4(in []byte) (address, []byte, error) {
+func handleStageConnectV4(in []byte) (address, []byte, error) {
 	if len(in) < 9 {
 		return address{}, nil, errPartialRead
 	}
@@ -335,7 +335,7 @@ func handleSocksStageConnectV4(in []byte) (address, []byte, error) {
 	return addr, out, nil
 }
 
-func handleSocksStageConnectV5(in []byte) (address, []byte, error) {
+func handleStageConnectV5(in []byte) (address, []byte, error) {
 	if len(in) < 5 {
 		return address{}, nil, errPartialRead
 	}
@@ -393,7 +393,7 @@ func handleSocksStageConnectV5(in []byte) (address, []byte, error) {
 	return dst, out, nil
 }
 
-func handleSocksStageConnectSession(cfg config, ses *session, addr address) error {
+func handleStageConnectSession(cfg config, ses *session, addr address) error {
 	pld := payloadConnect(addr)
 	encoded := pld.encode()
 	encrypted, err := encrypt(encoded, cfg.Session.SecretKey)
@@ -411,7 +411,7 @@ func handleSocksStageConnectSession(cfg config, ses *session, addr address) erro
 	return nil
 }
 
-func handleSocksStageForward(ses *session, in []byte, chunkSize int) error {
+func handleStageForward(ses *session, in []byte, chunkSize int) error {
 	chunks := bytesToChunks(in, chunkSize, 0)
 
 	for _, chunk := range chunks {
@@ -443,7 +443,7 @@ func bytesToHex(b []byte) string {
 }
 
 func bytesToChunks(b []byte, size int, count int) [][]byte {
-	if count == 1 {
+	if size == 0 || count == 1 {
 		return [][]byte{b}
 	}
 
