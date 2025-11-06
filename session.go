@@ -313,8 +313,8 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 			dg.number = s.nextNumber()
 		}
 
-		n := rand.Int31n(int32(len(initMethods)))
-		methods = append(methods, initMethods[n])
+		method := randElem(initMethods)
+		methods = append(methods, method)
 		fragments = append(fragments, dg)
 
 		return methods, fragments, nil
@@ -333,16 +333,15 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 			return nil, nil, errors.New("no methods available")
 		}
 
-		n := rand.Int31n(int32(len(availableMethods)))
-		methods = append(methods, availableMethods[n])
+		method := randElem(availableMethods)
+		methods = append(methods, method)
 		fragments = append(fragments, dg)
 
 		return methods, fragments, nil
 	}
 
 	for len(dg.payload) > 0 {
-		n := rand.Int31n(int32(len(forwardMethods)))
-		method := forwardMethods[n]
+		method := randElem(forwardMethods)
 		chunks := bytesToChunks(dg.payload, methodsMaxLenPayload[method], 2)
 
 		if len(chunks) == 0 || len(chunks) > 2 {
@@ -512,8 +511,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 
 	s.mu.Unlock()
 
-	n := rand.Int31n(int32(len(methods)))
-	method := methods[n]
+	method := randElem(methods)
 
 	switch method {
 	case methodPost:
@@ -619,4 +617,14 @@ func clearSession() error {
 	wg.Wait()
 
 	return nil
+}
+
+func randElem[T any](elems []T) T {
+	if len(elems) == 0 {
+		return *new(T)
+	}
+
+	n := rand.Int31n(int32(len(elems)))
+
+	return elems[n]
 }
