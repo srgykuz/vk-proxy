@@ -425,6 +425,10 @@ func (q *handlerPriorityQueue) add(dg datagram) error {
 	defer q.mu.Unlock()
 
 	if q.closed {
+		if dg.command == commandClose {
+			return nil
+		}
+
 		return errors.New("queue is closed")
 	}
 
