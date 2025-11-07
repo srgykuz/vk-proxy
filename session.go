@@ -640,7 +640,7 @@ func randElem[T any](elems []T) T {
 		return *new(T)
 	}
 
-	n := rand.Int31n(int32(len(elems)))
+	n := rand.Intn(len(elems))
 
 	return elems[n]
 }
