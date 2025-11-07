@@ -290,30 +290,26 @@ func (s *session) listenDatagrams() {
 }
 
 func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
-	initMethods := []int{methodPost, methodQR}
-	forwardMethods := []int{methodDoc, methodQR}
+	smallMethods := []int{methodMessage, methodPost, methodQR}
+	bigMethods := []int{methodDoc}
 
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
-		initMethods = append(initMethods, methodComment)
+		smallMethods = append(smallMethods, methodComment, methodComment)
 	}
 
 	s.mu.Unlock()
 
-	if rand.Int31()%3 == 0 {
-		initMethods = append(initMethods, methodMessage)
-	}
-
 	methods := []int{}
 	fragments := []datagram{}
 
-	if dg.command != commandForward {
+	if dg.command != commandForward || dg.LenEncoded() <= methodsMaxLenEncoded[methodQR] {
 		if dg.number == 0 {
 			dg.number = s.nextNumber()
 		}
 
-		method := randElem(initMethods)
+		method := randElem(smallMethods)
 		methods = append(methods, method)
 		fragments = append(fragments, dg)
 
@@ -323,7 +319,7 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 	if dg.number != 0 {
 		availableMethods := []int{}
 
-		for _, m := range forwardMethods {
+		for _, m := range bigMethods {
 			if dg.LenEncoded() <= methodsMaxLenEncoded[m] {
 				availableMethods = append(availableMethods, m)
 			}
@@ -341,7 +337,7 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 	}
 
 	for len(dg.payload) > 0 {
-		method := randElem(forwardMethods)
+		method := randElem(bigMethods)
 		chunks := bytesToChunks(dg.payload, methodsMaxLenPayload[method], 2)
 
 		if len(chunks) == 0 || len(chunks) > 2 {
@@ -515,12 +511,12 @@ func (s *session) executeMethodDoc(encoded string) error {
 	}
 
 	msg := strings.ReplaceAll(uri, ".", ". ")
-	methods := []int{methodPost, methodQR}
+	methods := []int{methodMessage, methodPost, methodQR}
 
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
-		methods = append(methods, methodComment)
+		methods = append(methods, methodComment, methodComment)
 	}
 
 	s.mu.Unlock()
@@ -528,6 +524,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 	method := randElem(methods)
 
 	switch method {
+	case methodMessage:
+		err = s.executeMethodMessage(msg)
 	case methodPost:
 		err = s.executeMethodPost(msg)
 	case methodComment:
@@ -535,7 +533,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	case methodQR:
 		err = s.executeMethodQR([]string{zero}, msg)
 	default:
-		return fmt.Errorf("unknown method: %v", method)
+		err = fmt.Errorf("unknown method: %v", method)
 	}
 
 	return err
