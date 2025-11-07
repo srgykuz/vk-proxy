@@ -13,6 +13,8 @@ type config struct {
 	Session configSession `json:"session"`
 	Socks   configSocks   `json:"socks"`
 	API     configAPI     `json:"api"`
+	Clubs   []configClub  `json:"clubs"`
+	Users   []configUser  `json:"users"`
 	QR      configQR      `json:"qr"`
 }
 
@@ -55,13 +57,8 @@ func (cfg configSocks) ForwardInterval() time.Duration {
 }
 
 type configAPI struct {
-	TimeoutMS       int    `json:"timeout"`
-	IntervalMS      int    `json:"interval"`
-	UserID          string `json:"userID"`
-	UserAccessToken string `json:"userAccessToken"`
-	ClubID          string `json:"clubID"`
-	ClubAccessToken string `json:"clubAccessToken"`
-	AlbumID         string `json:"albumID"`
+	TimeoutMS  int `json:"timeout"`
+	IntervalMS int `json:"interval"`
 }
 
 func (cfg configAPI) Timeout() time.Duration {
@@ -70,6 +67,19 @@ func (cfg configAPI) Timeout() time.Duration {
 
 func (cfg configAPI) Interval() time.Duration {
 	return time.Duration(cfg.IntervalMS) * time.Millisecond
+}
+
+type configClub struct {
+	Name        string `json:"name"`
+	ID          string `json:"id"`
+	AccessToken string `json:"accessToken"`
+	AlbumID     string `json:"albumID"`
+}
+
+type configUser struct {
+	Name        string `json:"name"`
+	ID          string `json:"id"`
+	AccessToken string `json:"accessToken"`
 }
 
 type configQR struct {
@@ -148,24 +158,44 @@ func parseConfig(name string) (config, error) {
 }
 
 func validateConfig(cfg config) error {
-	if cfg.API.UserID == "" {
-		return errors.New("api.userID is missing")
+	if len(cfg.Clubs) == 0 {
+		return errors.New("clubs is missing")
 	}
 
-	if cfg.API.UserAccessToken == "" {
-		return errors.New("api.userAccessToken is missing")
+	if len(cfg.Users) == 0 {
+		return errors.New("users is missing")
 	}
 
-	if cfg.API.ClubID == "" {
-		return errors.New("api.clubID is missing")
+	for _, club := range cfg.Clubs {
+		if club.Name == "" {
+			return errors.New("club.name is missing")
+		}
+
+		if club.ID == "" {
+			return errors.New("club.id is missing")
+		}
+
+		if club.AccessToken == "" {
+			return errors.New("club.accessToken is missing")
+		}
+
+		if club.AlbumID == "" {
+			return errors.New("club.albumID is missing")
+		}
 	}
 
-	if cfg.API.ClubAccessToken == "" {
-		return errors.New("api.clubAccessToken is missing")
-	}
+	for _, user := range cfg.Users {
+		if user.Name == "" {
+			return errors.New("user.name is missing")
+		}
 
-	if cfg.API.AlbumID == "" {
-		return errors.New("api.albumID is missing")
+		if user.ID == "" {
+			return errors.New("user.id is missing")
+		}
+
+		if user.AccessToken == "" {
+			return errors.New("user.accessToken is missing")
+		}
 	}
 
 	if len(cfg.Session.SecretKey) == 0 {

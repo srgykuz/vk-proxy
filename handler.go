@@ -13,38 +13,38 @@ import (
 	"time"
 )
 
-func listenLongPoll(cfg config) error {
-	server, err := groupsGetLongPollServer(cfg.API)
+func listenLongPoll(cfg config, club configClub) error {
+	server, err := groupsGetLongPollServer(cfg.API, club)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("club %v: %v", club.Name, err)
 	}
 
 	last := groupsUseLongPollServerResponse{
 		TS: server.TS,
 	}
 
-	slog.Info("long poll: listening")
+	slog.Info("long poll: listening", "club", club.Name)
 
 	for {
 		last, err = groupsUseLongPollServer(cfg.API, server, last)
 
 		if err != nil {
-			slog.Error("long poll: listen", "err", err)
+			slog.Error("long poll: listen", "club", club.Name, "err", err)
 			continue
 		}
 
 		if last.Failed != 0 {
-			slog.Debug("long poll: refresh")
+			slog.Debug("long poll: refresh", "club", club.Name)
 
-			server, err = groupsGetLongPollServer(cfg.API)
+			server, err = groupsGetLongPollServer(cfg.API, club)
 
 			if err == nil {
 				last = groupsUseLongPollServerResponse{
 					TS: server.TS,
 				}
 			} else {
-				slog.Error("long poll: refresh", "err", err)
+				slog.Error("long poll: refresh", "club", club.Name, "err", err)
 			}
 
 			continue
@@ -52,15 +52,15 @@ func listenLongPoll(cfg config) error {
 
 		for _, upd := range last.Updates {
 			go func(upd update) {
-				if err := handleUpdate(cfg, upd); err != nil {
-					slog.Error("handler: update", "type", upd.Type, "err", err)
+				if err := handleUpdate(cfg, club, upd); err != nil {
+					slog.Error("handler: update", "club", club.Name, "type", upd.Type, "err", err)
 				}
 			}(upd)
 		}
 	}
 }
 
-func handleUpdate(cfg config, upd update) error {
+func handleUpdate(cfg config, club configClub, upd update) error {
 	var encodedS string
 	var encodedB []byte
 	var datagrams []datagram
@@ -77,7 +77,7 @@ func handleUpdate(cfg config, upd update) error {
 		if strings.HasPrefix(upd.Object.Text, "https://") {
 			encodedS = upd.Object.Text
 		} else if shouldHandlePhoto(upd.Object.Text) {
-			datagrams, err = handlePhoto(cfg, upd.Object.OrigPhoto.URL)
+			datagrams, err = handlePhoto(cfg.API, cfg.QR, upd.Object.OrigPhoto.URL)
 		}
 	default:
 		err = errors.New("unsupported update")
@@ -115,10 +115,10 @@ func handleUpdate(cfg config, upd update) error {
 	}
 
 	for _, dg := range datagrams {
-		slog.Debug("handler: update", "type", upd.Type, "dg", dg)
+		slog.Debug("handler: update", "club", club.Name, "type", upd.Type, "dg", dg)
 
 		if err := handleDatagram(cfg, dg); err != nil {
-			slog.Error("handler: update", "type", upd.Type, "dg", dg, "err", err)
+			slog.Error("handler: update", "club", club.Name, "type", upd.Type, "dg", dg, "err", err)
 		}
 	}
 
@@ -176,14 +176,14 @@ func clearDocURL(uri string) string {
 	return parsed.String()
 }
 
-func handlePhoto(cfg config, url string) ([]datagram, error) {
-	b, err := apiDownloadURL(cfg.API, url)
+func handlePhoto(cfgAPI configAPI, cfgQR configQR, url string) ([]datagram, error) {
+	b, err := apiDownloadURL(cfgAPI, url)
 
 	if err != nil {
 		return nil, fmt.Errorf("download url: %v", err)
 	}
 
-	file, err := saveQR(cfg.QR, b, "jpg")
+	file, err := saveQR(cfgQR, b, "jpg")
 
 	if err != nil {
 		return nil, fmt.Errorf("save qr: %v", err)
@@ -191,7 +191,7 @@ func handlePhoto(cfg config, url string) ([]datagram, error) {
 
 	defer os.Remove(file)
 
-	content, err := decodeQR(cfg.QR, file)
+	content, err := decodeQR(cfgQR, file)
 
 	if err != nil {
 		return nil, fmt.Errorf("decode qr: %v", err)

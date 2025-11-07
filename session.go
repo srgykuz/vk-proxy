@@ -92,7 +92,7 @@ type session struct {
 	writes    chan []byte
 	datagrams chan datagram
 	activity  time.Time
-	post      wallPostResponse
+	posts     map[configClub]wallPostResponse
 }
 
 func openSession(id dgSes, cfg config) (*session, error) {
@@ -111,7 +111,7 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		writes:    make(chan []byte, cfg.Session.QueueSize),
 		datagrams: make(chan datagram, cfg.Session.QueueSize),
 		activity:  time.Now(),
-		post:      wallPostResponse{},
+		posts:     make(map[configClub]wallPostResponse),
 	}
 
 	s.wg.Add(1)
@@ -295,7 +295,7 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 
 	s.mu.Lock()
 
-	if s.post.PostID > 0 {
+	if len(s.posts) > 0 {
 		initMethods = append(initMethods, methodComment)
 	}
 
@@ -437,26 +437,29 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 }
 
 func (s *session) executeMethodMessage(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	user := randElem(s.cfg.Users)
 	p := messagesSendParams{
 		message: encoded,
 	}
-	_, err := messagesSend(s.cfg.API, p)
+	_, err := messagesSend(s.cfg.API, club, user, p)
 
 	return err
 }
 
 func (s *session) executeMethodPost(encoded string) error {
+	club := randElem(s.cfg.Clubs)
 	p := wallPostParams{
 		message: encoded,
 	}
-	resp, err := wallPost(s.cfg.API, p)
+	resp, err := wallPost(s.cfg.API, club, p)
 
 	if err != nil {
 		return err
 	}
 
 	s.mu.Lock()
-	s.post = resp
+	s.posts[club] = resp
 	s.mu.Unlock()
 
 	return nil
@@ -464,27 +467,38 @@ func (s *session) executeMethodPost(encoded string) error {
 
 func (s *session) executeMethodComment(encoded string) error {
 	s.mu.Lock()
-	post := s.post
-	s.mu.Unlock()
 
-	if post.PostID == 0 {
-		return errors.New("post is not created")
+	if len(s.posts) == 0 {
+		s.mu.Unlock()
+		return errors.New("no posts created")
 	}
+
+	clubs := []configClub{}
+
+	for key := range s.posts {
+		clubs = append(clubs, key)
+	}
+
+	club := randElem(clubs)
+	post := s.posts[club]
+
+	s.mu.Unlock()
 
 	p := wallCreateCommentParams{
 		postID:  post.PostID,
 		message: encoded,
 	}
-	_, err := wallCreateComment(s.cfg.API, p)
+	_, err := wallCreateComment(s.cfg.API, club, p)
 
 	return err
 }
 
 func (s *session) executeMethodDoc(encoded string) error {
+	club := randElem(s.cfg.Clubs)
 	uploadP := docsUploadParams{
 		data: []byte(encoded),
 	}
-	resp, err := docsUploadAndSave(s.cfg.API, uploadP)
+	resp, err := docsUploadAndSave(s.cfg.API, club, uploadP)
 
 	if err != nil {
 		return err
@@ -505,7 +519,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 
 	s.mu.Lock()
 
-	if s.post.PostID > 0 {
+	if len(s.posts) > 0 {
 		methods = append(methods, methodComment)
 	}
 
@@ -551,6 +565,8 @@ func (s *session) executeMethodQR(encoded []string, caption string) error {
 		caption = zero
 	}
 
+	club := randElem(s.cfg.Clubs)
+	user := randElem(s.cfg.Users)
 	p := photosUploadAndSaveParams{
 		photosUploadParams: photosUploadParams{
 			data: qr,
@@ -560,7 +576,7 @@ func (s *session) executeMethodQR(encoded []string, caption string) error {
 		},
 	}
 
-	if _, err := photosUploadAndSave(s.cfg.API, p); err != nil {
+	if _, err := photosUploadAndSave(s.cfg.API, club, user, p); err != nil {
 		return fmt.Errorf("upload: %v", err)
 	}
 

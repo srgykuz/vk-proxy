@@ -49,15 +49,17 @@ func main() {
 		}
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	for _, club := range cfg.Clubs {
+		wg.Add(1)
+		go func(club configClub) {
+			defer wg.Done()
 
-		if err := listenLongPoll(cfg); err != nil {
-			fmt.Fprintln(os.Stderr, "listen long poll:", err)
-			os.Exit(1)
-		}
-	}()
+			if err := listenLongPoll(cfg, club); err != nil {
+				fmt.Fprintln(os.Stderr, "listen long poll:", err)
+				os.Exit(1)
+			}
+		}(club)
+	}
 
 	wg.Add(1)
 	go func() {
