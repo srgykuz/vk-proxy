@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"sync"
 )
@@ -30,7 +29,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.SetLogLoggerLevel(slog.Level(cfg.Log.Level))
+	if err := configureLogger(cfg.Log); err != nil {
+		fmt.Fprintln(os.Stderr, "configure logger:", err)
+		os.Exit(1)
+	}
 
 	if err := initSession(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, "init session:", err)

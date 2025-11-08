@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 )
@@ -19,8 +20,9 @@ type config struct {
 }
 
 type configLog struct {
-	Level   int  `json:"level"`
-	Payload bool `json:"payload"`
+	Level   int    `json:"level"`
+	Output  string `json:"output"`
+	Payload bool   `json:"payload"`
 }
 
 type configSession struct {
@@ -234,6 +236,28 @@ func validateQR(cfg config) error {
 	if content != decoded[0] {
 		return errors.New("encoded and decoded content mismatch")
 	}
+
+	return nil
+}
+
+func configureLogger(cfg configLog) error {
+	if len(cfg.Output) == 0 {
+		slog.SetLogLoggerLevel(slog.Level(cfg.Level))
+		return nil
+	}
+
+	f, err := os.OpenFile(cfg.Output, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+
+	if err != nil {
+		return err
+	}
+
+	handler := slog.NewTextHandler(f, &slog.HandlerOptions{
+		Level: slog.Level(cfg.Level),
+	})
+	logger := slog.New(handler)
+
+	slog.SetDefault(logger)
 
 	return nil
 }
