@@ -13,10 +13,10 @@ type config struct {
 	Log     configLog     `json:"log"`
 	Session configSession `json:"session"`
 	Socks   configSocks   `json:"socks"`
-	API     configAPI     `json:"api"`
+	API     configAPI     `json:"-"`
+	QR      configQR      `json:"qr"`
 	Clubs   []configClub  `json:"clubs"`
 	Users   []configUser  `json:"users"`
-	QR      configQR      `json:"qr"`
 }
 
 type configLog struct {
@@ -26,10 +26,9 @@ type configLog struct {
 }
 
 type configSession struct {
-	QueueSize int    `json:"queueSize"`
 	TimeoutMS int    `json:"timeout"`
 	Secret    string `json:"secret"`
-	SecretKey []byte
+	SecretKey []byte `json:"-"`
 }
 
 func (cfg configSession) Timeout() time.Duration {
@@ -39,19 +38,8 @@ func (cfg configSession) Timeout() time.Duration {
 type configSocks struct {
 	ListenHost        string `json:"listenHost"`
 	ListenPort        uint16 `json:"listenPort"`
-	ReadSize          int    `json:"readSize"`
-	ReadTimeoutMS     int    `json:"readTimeout"`
-	WriteTimeoutMS    int    `json:"writeTimeout"`
 	ForwardSize       int    `json:"forwardSize"`
 	ForwardIntervalMS int    `json:"forwardInterval"`
-}
-
-func (cfg configSocks) ReadTimeout() time.Duration {
-	return time.Duration(cfg.ReadTimeoutMS) * time.Millisecond
-}
-
-func (cfg configSocks) WriteTimeout() time.Duration {
-	return time.Duration(cfg.WriteTimeoutMS) * time.Millisecond
 }
 
 func (cfg configSocks) ForwardInterval() time.Duration {
@@ -59,16 +47,18 @@ func (cfg configSocks) ForwardInterval() time.Duration {
 }
 
 type configAPI struct {
-	TimeoutMS  int `json:"timeout"`
-	IntervalMS int `json:"interval"`
+	TimeoutMS int `json:"-"`
 }
 
 func (cfg configAPI) Timeout() time.Duration {
 	return time.Duration(cfg.TimeoutMS) * time.Millisecond
 }
 
-func (cfg configAPI) Interval() time.Duration {
-	return time.Duration(cfg.IntervalMS) * time.Millisecond
+type configQR struct {
+	ZBarPath   string `json:"zbarPath"`
+	ImageSize  int    `json:"-"`
+	ImageLevel int    `json:"-"`
+	SaveDir    string `json:"saveDir"`
 }
 
 type configClub struct {
@@ -84,47 +74,27 @@ type configUser struct {
 	AccessToken string `json:"accessToken"`
 }
 
-type configQR struct {
-	ZBarPath      string `json:"zbarPath"`
-	ZBarTimeoutMS int    `json:"zbarTimeout"`
-	ImageSize     int    `json:"imageSize"`
-	ImageLevel    int    `json:"imageLevel"`
-	MergeSize     int    `json:"mergeSize"`
-	SaveDir       string `json:"saveDir"`
-}
-
-func (cfg configQR) ZBarTimeout() time.Duration {
-	return time.Duration(cfg.ZBarTimeoutMS) * time.Millisecond
-}
-
 func defaultConfig() config {
 	return config{
 		Log: configLog{
 			Level: 0,
 		},
 		Session: configSession{
-			QueueSize: 500,
 			TimeoutMS: 30 * 1000,
 		},
 		Socks: configSocks{
 			ListenHost:        "127.0.0.1",
 			ListenPort:        1080,
-			ReadSize:          4096,
-			ReadTimeoutMS:     10 * 1000,
-			WriteTimeoutMS:    10 * 1000,
-			ForwardSize:       3000,
-			ForwardIntervalMS: 300,
+			ForwardSize:       1 * 1024 * 1024,
+			ForwardIntervalMS: 500,
 		},
 		API: configAPI{
-			TimeoutMS:  7 * 1000,
-			IntervalMS: 55,
+			TimeoutMS: 10 * 1000,
 		},
 		QR: configQR{
-			ZBarPath:      "/usr/local/bin/zbarimg",
-			ZBarTimeoutMS: 5 * 1000,
-			ImageSize:     512,
-			MergeSize:     2000,
-			ImageLevel:    1,
+			ZBarPath:   "zbarimg",
+			ImageSize:  512,
+			ImageLevel: 1,
 		},
 	}
 }
@@ -161,11 +131,11 @@ func parseConfig(name string) (config, error) {
 
 func validateConfig(cfg config) error {
 	if len(cfg.Clubs) == 0 {
-		return errors.New("clubs is missing")
+		return errors.New("clubs are missing")
 	}
 
 	if len(cfg.Users) == 0 {
-		return errors.New("users is missing")
+		return errors.New("users are missing")
 	}
 
 	for _, club := range cfg.Clubs {
@@ -207,15 +177,15 @@ func validateConfig(cfg config) error {
 	return nil
 }
 
-func validateQR(cfg config) error {
+func validateQR(cfg configQR) error {
 	content := "test"
-	data, err := encodeQR(cfg.QR, content)
+	data, err := encodeQR(cfg, content)
 
 	if err != nil {
 		return err
 	}
 
-	file, err := saveQR(cfg.QR, data, "png")
+	file, err := saveQR(cfg, data, "png")
 
 	if err != nil {
 		return err
@@ -223,7 +193,7 @@ func validateQR(cfg config) error {
 
 	defer os.Remove(file)
 
-	decoded, err := decodeQR(cfg.QR, file)
+	decoded, err := decodeQR(cfg, file)
 
 	if err != nil {
 		return err

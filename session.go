@@ -108,8 +108,8 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		closed:    false,
 		onClose:   make(chan struct{}),
 		history:   make(map[dgNum]datagram),
-		writes:    make(chan []byte, cfg.Session.QueueSize),
-		datagrams: make(chan datagram, cfg.Session.QueueSize),
+		writes:    make(chan []byte, 500),
+		datagrams: make(chan datagram, 500),
 		activity:  time.Now(),
 		posts:     make(map[configClub]wallPostResponse),
 	}
@@ -182,7 +182,13 @@ func (s *session) isInactive() bool {
 		return false
 	}
 
-	return time.Since(s.activity) > s.cfg.Session.Timeout()
+	timeout := s.cfg.Session.Timeout()
+
+	if timeout == 0 {
+		return false
+	}
+
+	return time.Since(s.activity) > timeout
 }
 
 func (s *session) nextNumber() dgNum {

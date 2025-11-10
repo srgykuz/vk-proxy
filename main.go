@@ -24,7 +24,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := validateQR(cfg); err != nil {
+	if err := validateQR(cfg.QR); err != nil {
 		fmt.Fprintln(os.Stderr, "validate qr:", err)
 		os.Exit(1)
 	}

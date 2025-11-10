@@ -57,10 +57,13 @@ func apiForm(fields map[string]string, files map[string][]byte) (io.Reader, stri
 }
 
 func apiDo(cfg configAPI, club configClub, user configUser, req *http.Request) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(req.Context(), cfg.Timeout())
-	defer cancel()
+	if timeout := cfg.Timeout(); timeout > 0 {
+		ctx, cancel := context.WithTimeout(req.Context(), timeout)
+		defer cancel()
 
-	req = req.WithContext(ctx)
+		req = req.WithContext(ctx)
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 
 	method := strings.TrimPrefix(req.URL.Path, "/method/")

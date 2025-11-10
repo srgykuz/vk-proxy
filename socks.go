@@ -118,12 +118,10 @@ func handleSocks(cfg config, ses *session, stage int) error {
 
 func readSocks(cfg config, ses *session, stage int, fwdBuf *opBuffer) error {
 	peer := ses.peer.RemoteAddr().String()
-	temp := make([]byte, cfg.Socks.ReadSize)
+	temp := make([]byte, 4*1024)
 
 	for {
-		deadline := time.Now().Add(cfg.Socks.ReadTimeout())
-
-		if err := ses.peer.SetReadDeadline(deadline); err != nil {
+		if err := ses.peer.SetReadDeadline(time.Time{}); err != nil {
 			return err
 		}
 
@@ -247,7 +245,8 @@ func writeSocks(cfg config, ses *session, out []byte) error {
 		slog.Debug("socks: payload", "peer", peer, "out", bytesToHex(out))
 	}
 
-	deadline := time.Now().Add(cfg.Socks.WriteTimeout())
+	timeout := 10 * time.Second
+	deadline := time.Now().Add(timeout)
 
 	if err := ses.peer.SetWriteDeadline(deadline); err != nil {
 		return err
