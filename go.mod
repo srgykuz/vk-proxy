@@ -1,4 +1,4 @@
-module vk-proxy
+module github.com/srgykuz/vk-proxy
 
 go 1.25.1
 
