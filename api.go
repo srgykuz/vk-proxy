@@ -13,6 +13,8 @@ import (
 	"strings"
 )
 
+var errUnathorizedUser = errors.New("user is not authorized")
+
 func apiURL(method string, values url.Values) string {
 	method = strings.TrimPrefix(method, "/")
 
@@ -577,6 +579,10 @@ type photosGetUploadServerResponse struct {
 }
 
 func photosGetUploadServer(cfg configAPI, club configClub, user configUser) (photosGetUploadServerResponse, error) {
+	if cfg.Unathorized {
+		return photosGetUploadServerResponse{}, errUnathorizedUser
+	}
+
 	values := apiValues(user.AccessToken)
 
 	values.Set("group_id", club.ID)
@@ -678,6 +684,10 @@ type photosSaveResponse struct {
 }
 
 func photosSave(cfg configAPI, club configClub, user configUser, params photosSaveParams) (photosSaveResponse, error) {
+	if cfg.Unathorized {
+		return photosSaveResponse{}, errUnathorizedUser
+	}
+
 	values := apiValues(user.AccessToken)
 
 	values.Set("group_id", club.ID)

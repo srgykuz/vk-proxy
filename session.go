@@ -26,10 +26,18 @@ var (
 	errSessionQueueFull = errors.New("session queue is full")
 )
 
+var methodsEnabled = map[int]bool{}
 var methodsMaxLenEncoded = map[int]int{}
 var methodsMaxLenPayload = map[int]int{}
 
 func initSession(cfg config) error {
+	methodsEnabled = map[int]bool{
+		methodMessage: true,
+		methodPost:    true,
+		methodComment: true,
+		methodDoc:     true,
+		methodQR:      !cfg.API.Unathorized,
+	}
 	methodsMaxLenEncoded = map[int]int{
 		methodMessage: 4096,
 		methodPost:    16000,
@@ -296,8 +304,12 @@ func (s *session) listenDatagrams() {
 }
 
 func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
-	smallMethods := []int{methodMessage, methodPost, methodQR}
+	smallMethods := []int{methodMessage, methodPost}
 	bigMethods := []int{methodDoc}
+
+	if enabled := methodsEnabled[methodQR]; enabled {
+		smallMethods = append(smallMethods, methodQR)
+	}
 
 	s.mu.Lock()
 
@@ -517,7 +529,11 @@ func (s *session) executeMethodDoc(encoded string) error {
 	}
 
 	msg := strings.ReplaceAll(uri, ".", ". ")
-	methods := []int{methodMessage, methodPost, methodQR}
+	methods := []int{methodMessage, methodPost}
+
+	if enabled := methodsEnabled[methodQR]; enabled {
+		methods = append(methods, methodQR)
+	}
 
 	s.mu.Lock()
 

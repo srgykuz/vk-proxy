@@ -12,7 +12,7 @@ type config struct {
 	Log     configLog     `json:"log"`
 	Session configSession `json:"session"`
 	Socks   configSocks   `json:"socks"`
-	API     configAPI     `json:"-"`
+	API     configAPI     `json:"api"`
 	QR      configQR      `json:"qr"`
 	Clubs   []configClub  `json:"clubs"`
 	Users   []configUser  `json:"users"`
@@ -46,7 +46,8 @@ func (cfg configSocks) ForwardInterval() time.Duration {
 }
 
 type configAPI struct {
-	TimeoutMS int `json:"-"`
+	TimeoutMS   int  `json:"-"`
+	Unathorized bool `json:"unathorized"`
 }
 
 func (cfg configAPI) Timeout() time.Duration {
@@ -164,7 +165,7 @@ func validateConfig(cfg config) error {
 			return errors.New("user.id is missing")
 		}
 
-		if user.AccessToken == "" {
+		if user.AccessToken == "" && !cfg.API.Unathorized {
 			return errors.New("user.accessToken is missing")
 		}
 	}
