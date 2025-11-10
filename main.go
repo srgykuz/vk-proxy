@@ -8,11 +8,13 @@ import (
 )
 
 func main() {
-	cfgPath := flag.String("config", "config.json", "path to configuration file")
+	var cfgPath string
+
+	flag.StringVar(&cfgPath, "config", "config.json", "path to configuration file")
 
 	flag.Parse()
 
-	cfg, err := parseConfig(*cfgPath)
+	cfg, err := parseConfig(cfgPath)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "parse config:", err)
@@ -20,7 +22,7 @@ func main() {
 	}
 
 	if err := validateConfig(cfg); err != nil {
-		fmt.Fprintln(os.Stderr, "invalid config:", err)
+		fmt.Fprintln(os.Stderr, "validate config:", err)
 		os.Exit(1)
 	}
 
@@ -78,7 +80,7 @@ func main() {
 		defer wg.Done()
 
 		if err := clearSession(); err != nil {
-			fmt.Fprintln(os.Stderr, "clear sessions:", err)
+			fmt.Fprintln(os.Stderr, "clear session:", err)
 			os.Exit(1)
 		}
 	}()
