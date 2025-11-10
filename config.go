@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -117,10 +116,10 @@ func parseConfig(name string) (config, error) {
 	}
 
 	if len(cfg.Session.Secret) > 0 {
-		key, err := hexToKey(cfg.Session.Secret)
+		key, err := secretToKey(cfg.Session.Secret)
 
 		if err != nil {
-			return config{}, fmt.Errorf("secret to key: %v", err)
+			return config{}, err
 		}
 
 		cfg.Session.SecretKey = key

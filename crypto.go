@@ -11,7 +11,17 @@ import (
 
 var errInvalidKey = errors.New("key must be 32 bytes")
 
-func hexToKey(s string) ([]byte, error) {
+func generateSecret() (string, error) {
+	b := make([]byte, 32)
+
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(b), nil
+}
+
+func secretToKey(s string) ([]byte, error) {
 	key, err := hex.DecodeString(s)
 
 	if err != nil {

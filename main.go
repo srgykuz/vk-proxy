@@ -9,10 +9,24 @@ import (
 
 func main() {
 	var cfgPath string
+	var genSecret bool
 
 	flag.StringVar(&cfgPath, "config", "config.json", "path to configuration file")
+	flag.BoolVar(&genSecret, "secret", false, "generate secret")
 
 	flag.Parse()
+
+	if genSecret {
+		secret, err := generateSecret()
+
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "generate secret:", err)
+			os.Exit(1)
+		}
+
+		fmt.Fprintln(os.Stdout, secret)
+		os.Exit(0)
+	}
 
 	cfg, err := parseConfig(cfgPath)
 
