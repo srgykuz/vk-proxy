@@ -1,0 +1,32 @@
+{
+    "log": {
+        "output": ""
+    },
+    "session": {
+        "secret": ""
+    },
+    "socks": {
+        "listenPort": 1080
+    },
+    "api": {
+        "unathorized": false
+    },
+    "qr": {
+        "zbarPath": "zbarimg"
+    },
+    "clubs": [
+        {
+            "name": "",
+            "id": "",
+            "accessToken": "",
+            "albumID": ""
+        }
+    ],
+    "users": [
+        {
+            "name": "",
+            "id": "",
+            "accessToken": ""
+        }
+    ]
+}
