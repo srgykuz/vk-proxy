@@ -1,5 +1,5 @@
-vk-proxy
-.env
 config*.json
 !config.template.json
 .vscode
+bin
+dist
