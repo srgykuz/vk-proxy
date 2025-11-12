@@ -7,7 +7,7 @@ build:
 	@mkdir -p $(BIN_DIR)
 	go build -o $(BIN_DIR)/$(NAME) .
 
-build-all:
+bin:
 	@mkdir -p $(BIN_DIR)
 	GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/$(NAME)_linux_amd64 .
 	GOOS=linux GOARCH=arm64 go build -o $(BIN_DIR)/$(NAME)_linux_arm64 .
@@ -16,7 +16,7 @@ build-all:
 	GOOS=windows GOARCH=amd64 go build -o $(BIN_DIR)/$(NAME)_windows_amd64.exe .
 	GOOS=windows GOARCH=arm64 go build -o $(BIN_DIR)/$(NAME)_windows_arm64.exe .
 
-package-all: build-all
+dist: bin
 	@mkdir -p $(DIST_DIR)/tmp
 
 	cp $(BIN_DIR)/$(NAME)_linux_amd64 $(DIST_DIR)/tmp/$(NAME)
@@ -51,7 +51,6 @@ package-all: build-all
 
 	rm -rf $(DIST_DIR)/tmp
 
-checksums: package-all
 	cd $(DIST_DIR) && shasum -a 256 *.tar.gz *.zip > $(NAME)_$(VERSION)_checksums.txt
 
 clean:
