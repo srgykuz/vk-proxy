@@ -1,0 +1,12 @@
+[Unit]
+Documentation=https://github.com/srgykuz/vk-proxy
+After=network.target nss-lookup.target
+
+[Service]
+User=nobody
+ExecStart=/usr/local/bin/vk-proxy -config /usr/local/etc/vk-proxy/config.json
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

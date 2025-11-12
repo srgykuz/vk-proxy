@@ -22,12 +22,14 @@ dist: bin
 	cp $(BIN_DIR)/$(NAME)_linux_amd64 $(DIST_DIR)/tmp/$(NAME)
 	cp README.md $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	tar -czf $(DIST_DIR)/$(NAME)_$(VERSION)_linux_amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json
+	cp systemd.service $(DIST_DIR)/tmp/$(NAME).service
+	tar -czf $(DIST_DIR)/$(NAME)_$(VERSION)_linux_amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json $(NAME).service
 
 	cp $(BIN_DIR)/$(NAME)_linux_arm64 $(DIST_DIR)/tmp/$(NAME)
 	cp README.md $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	tar -czf $(DIST_DIR)/$(NAME)_$(VERSION)_linux_arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json
+	cp systemd.service $(DIST_DIR)/tmp/$(NAME).service
+	tar -czf $(DIST_DIR)/$(NAME)_$(VERSION)_linux_arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json $(NAME).service
 
 	cp $(BIN_DIR)/$(NAME)_darwin_amd64 $(DIST_DIR)/tmp/$(NAME)
 	cp README.md $(DIST_DIR)/tmp/
