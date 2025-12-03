@@ -31,6 +31,7 @@ func listenLongPoll(cfg config, club configClub) error {
 
 		if err != nil {
 			slog.Error("long poll: listen", "club", club.Name, "err", err)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 
@@ -45,6 +46,7 @@ func listenLongPoll(cfg config, club configClub) error {
 				}
 			} else {
 				slog.Error("long poll: refresh", "club", club.Name, "err", err)
+				time.Sleep(5 * time.Second)
 			}
 
 			continue
