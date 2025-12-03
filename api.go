@@ -206,6 +206,18 @@ type groupsGetLongPollServerResponse struct {
 	TS     json.Number `json:"ts"`
 }
 
+func (r groupsGetLongPollServerResponse) check() error {
+	if len(r.Key) == 0 {
+		return errors.New("key is empty")
+	}
+
+	if len(r.Server) == 0 {
+		return errors.New("server is empty")
+	}
+
+	return nil
+}
+
 func groupsGetLongPollServer(cfg configAPI, club configClub) (groupsGetLongPollServerResponse, error) {
 	values := apiValues(club.AccessToken)
 
@@ -227,6 +239,10 @@ func groupsGetLongPollServer(cfg configAPI, club configClub) (groupsGetLongPollS
 	result := groupsGetLongPollServerResult{}
 
 	if err := json.Unmarshal(data, &result); err != nil {
+		return groupsGetLongPollServerResponse{}, err
+	}
+
+	if err := result.Response.check(); err != nil {
 		return groupsGetLongPollServerResponse{}, err
 	}
 
