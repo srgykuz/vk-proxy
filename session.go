@@ -99,13 +99,17 @@ type session struct {
 	history   map[dgNum]datagram
 	writes    chan []byte
 	datagrams chan datagram
+	openedAt  time.Time
 	activity  time.Time
 	posts     map[configClub]wallPostResponse
+	inBytes   int
+	outBytes  int
 }
 
 func openSession(id dgSes, cfg config) (*session, error) {
 	slog.Debug("session: open", "id", id)
 
+	now := time.Now()
 	s := &session{
 		cfg:       cfg,
 		id:        id,
@@ -118,8 +122,11 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		history:   make(map[dgNum]datagram),
 		writes:    make(chan []byte, 500),
 		datagrams: make(chan datagram, 500),
-		activity:  time.Now(),
+		openedAt:  now,
+		activity:  now,
 		posts:     make(map[configClub]wallPostResponse),
+		inBytes:   0,
+		outBytes:  0,
 	}
 
 	s.wg.Add(1)
@@ -154,6 +161,15 @@ func (s *session) close() {
 	} else {
 		slog.Debug("session: close", "id", s.id, "peer", s.peer.RemoteAddr().String())
 	}
+
+	slog.Debug(
+		"session: stats",
+		"id", s.id,
+		"in", s.inBytes,
+		"out", s.outBytes,
+		"duration", int(time.Since(s.openedAt).Seconds()),
+		"fragments", len(s.history),
+	)
 
 	s.closed = true
 
@@ -239,6 +255,7 @@ func (s *session) writePeer(b []byte) error {
 	}
 
 	s.activity = time.Now()
+	s.inBytes += len(b)
 
 	select {
 	case s.writes <- clone:
@@ -271,6 +288,7 @@ func (s *session) sendDatagram(dg datagram) error {
 	}
 
 	s.activity = time.Now()
+	s.outBytes += len(dg.payload)
 
 	select {
 	case s.datagrams <- clone:
