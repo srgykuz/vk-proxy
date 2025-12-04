@@ -15,6 +15,7 @@ bin:
 	GOOS=darwin GOARCH=arm64 go build -o $(BIN_DIR)/$(NAME)-darwin-arm64 .
 	GOOS=windows GOARCH=amd64 go build -o $(BIN_DIR)/$(NAME)-windows-amd64.exe .
 	GOOS=windows GOARCH=arm64 go build -o $(BIN_DIR)/$(NAME)-windows-arm64.exe .
+	GOOS=android GOARCH=arm64 go build -o $(BIN_DIR)/$(NAME)-android-arm64 .
 
 dist: bin
 	@mkdir -p $(DIST_DIR)/tmp
@@ -50,6 +51,11 @@ dist: bin
 	cp README.md $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
 	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-arm64.zip $(NAME).exe README.md config.json
+
+	cp $(BIN_DIR)/$(NAME)-android-arm64 $(DIST_DIR)/tmp/$(NAME)
+	cp README.md $(DIST_DIR)/tmp/
+	cp config.template.json $(DIST_DIR)/tmp/config.json
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-android-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json
 
 	rm -rf $(DIST_DIR)/tmp
 
