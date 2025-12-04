@@ -1,5 +1,5 @@
 NAME=vk-proxy
-VERSION=0.6
+VERSION=0.7
 BIN_DIR=bin
 DIST_DIR=dist
 
