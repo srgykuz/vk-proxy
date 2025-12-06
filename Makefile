@@ -20,36 +20,36 @@ dist: bin
 	@mkdir -p $(DIST_DIR)/tmp
 
 	cp $(BIN_DIR)/$(NAME)-linux-amd64 $(DIST_DIR)/tmp/$(NAME)
-	cp README.md $(DIST_DIR)/tmp/
+	cp README.md Dockerfile docker-compose.yml $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
 	cp systemd.service $(DIST_DIR)/tmp/$(NAME).service
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json $(NAME).service
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md Dockerfile docker-compose.yml config.json $(NAME).service
 
 	cp $(BIN_DIR)/$(NAME)-linux-arm64 $(DIST_DIR)/tmp/$(NAME)
-	cp README.md $(DIST_DIR)/tmp/
+	cp README.md Dockerfile docker-compose.yml $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
 	cp systemd.service $(DIST_DIR)/tmp/$(NAME).service
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json $(NAME).service
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md Dockerfile docker-compose.yml config.json $(NAME).service
 
 	cp $(BIN_DIR)/$(NAME)-darwin-amd64 $(DIST_DIR)/tmp/$(NAME)
-	cp README.md $(DIST_DIR)/tmp/
+	cp README.md Dockerfile docker-compose.yml $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-darwin-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-darwin-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md Dockerfile docker-compose.yml config.json
 
 	cp $(BIN_DIR)/$(NAME)-darwin-arm64 $(DIST_DIR)/tmp/$(NAME)
-	cp README.md $(DIST_DIR)/tmp/
+	cp README.md Dockerfile docker-compose.yml $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-darwin-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md config.json
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-darwin-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md Dockerfile docker-compose.yml config.json
 
 	cp $(BIN_DIR)/$(NAME)-windows-amd64.exe $(DIST_DIR)/tmp/$(NAME).exe
-	cp README.md $(DIST_DIR)/tmp/
+	cp README.md Dockerfile docker-compose.yml $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-amd64.zip $(NAME).exe README.md config.json
+	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-amd64.zip $(NAME).exe README.md Dockerfile docker-compose.yml config.json
 
 	cp $(BIN_DIR)/$(NAME)-windows-arm64.exe $(DIST_DIR)/tmp/$(NAME).exe
-	cp README.md $(DIST_DIR)/tmp/
+	cp README.md Dockerfile docker-compose.yml $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-arm64.zip $(NAME).exe README.md config.json
+	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-arm64.zip $(NAME).exe README.md Dockerfile docker-compose.yml config.json
 
 	rm -rf $(DIST_DIR)/tmp
 
