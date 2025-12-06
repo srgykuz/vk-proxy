@@ -1,0 +1,16 @@
+services:
+  vk-proxy:
+    image: vk-proxy:latest
+    container_name: vk-proxy
+    build: .
+    ports:
+      - 1080:1080
+    volumes:
+      - ./config.json:/usr/local/etc/vk-proxy/config.json:ro
+      # - ./output.log:/var/log/vk-proxy/output.log
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 3
