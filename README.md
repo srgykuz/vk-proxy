@@ -162,6 +162,7 @@ nano /usr/local/etc/vk-proxy/config.json
         "secret": "abc123"
     },
     "socks": {
+        "listenHost": "127.0.0.1",
         "listenPort": 1080
     },
     "api": {
