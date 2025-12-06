@@ -254,8 +254,8 @@ tail -n 100 /var/log/vk-proxy/output.log
 
 Выполните [это](#5-заполните-конфиг). Заполните конфиг в текущей папке.
 
-- в `log.output` установите `""`
-- в `api.unathorized` установите `true`. На втором устройстве тоже установите `true`
+- в `log.output` укажите `""`
+- в `api.unathorized` укажите `true`. На втором устройстве тоже укажите `true`
 
 #### 5. Запустите программу
 
@@ -297,8 +297,8 @@ docker compose run --rm vk-proxy -secret
 
 Выполните [это](#5-заполните-конфиг). Заполните конфиг в текущей папке.
 
-- в `log.output` установите `""`
-- в `socks.listenHost` установите `"0.0.0.0"`
+- в `log.output` укажите `""`
+- в `socks.listenHost` укажите `"0.0.0.0"`
 
 #### 5. Запустите программу
 
@@ -319,6 +319,57 @@ docker compose restart
 ```bash
 docker compose logs -n 100
 ```
+
+### Android
+
+Предварительно установите и запустите [Termux](https://github.com/termux/termux-app). Рекомендуется устанавливать версию из [F-Droid](https://f-droid.org/en/packages/com.termux).
+
+Для Android-версии необходимо [выключить использование QR-кодов](#без-доступа-к-аккаунту).
+
+#### 1. Установите зависимости
+
+```bash
+pkg update
+pkg install -y wget nano zbar proot
+```
+
+#### 2. Скачайте архив
+
+Выполните [это](#2-скачайте-архив). Используйте Android-версию.
+
+#### 3. Сгенерируйте секрет
+
+Выполните [это](#4-сгенерируйте-секрет). Замените `vk-proxy` на `./vk-proxy`.
+
+#### 4. Заполните конфиг
+
+Откройте конфиг:
+
+```bash
+nano config.json
+```
+
+И выполните [это](#5-заполните-конфиг).
+
+- в `log.output` укажите `""`
+- в `api.unathorized` укажите `true`. На втором устройстве тоже укажите `true`
+
+Если печатать на телефоне утомительно, то заполните конфиг на компьютере, отправьте текст на телефон, скопируйте этот текст и вставьте в конфиг с нуля:
+
+```bash
+rm config.json
+nano config.json
+```
+
+#### 5. Запустите программу
+
+```bash
+termux-chroot ./vk-proxy
+```
+
+После закрытия терминала программа будет остановлена. Чтобы запустить ее снова, откройте папку в терминале и запустите программу.
+
+Для перезапуска программы остановите ее с помощью Ctrl+C и запустите снова.
 
 ## Использование
 
@@ -506,11 +557,54 @@ vk-proxy может начать работать нестабильно или 
                     "wikipedia.org",
                     "wikimedia.org"
                 ],
+                "network": "tcp",
                 "outboundTag": "vk-proxy"
             }
         ]
     }
 }
+```
+
+</details>
+
+<details>
+
+<summary>
+Пример конфига v2rayN и v2rayNG
+</summary>
+
+Интерфейс:
+
+```text
+socks://Og%3D%3D@127.0.0.1:1080#vk-proxy
+```
+
+Роутинг:
+
+```json
+[
+    {
+        "domain": [
+            "google.com",
+            "gstatic.com",
+            "googleusercontent.com",
+            "wikipedia.org",
+            "wikimedia.org"
+        ],
+        "enabled": true,
+        "locked": true,
+        "network": "tcp",
+        "outboundTag": "proxy",
+        "remarks": "vk-proxy: proxy"
+    },
+    {
+        "enabled": true,
+        "locked": true,
+        "outboundTag": "direct",
+        "port": "0-65535",
+        "remarks": "vk-proxy: direct"
+    }
+]
 ```
 
 </details>
