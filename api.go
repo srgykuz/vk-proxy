@@ -769,3 +769,88 @@ func photosUploadAndSave(cfg configAPI, club configClub, user configUser, params
 
 	return saved, nil
 }
+
+type storageGetParams struct {
+	keys   []string
+	userID string
+}
+
+type storageGetResult struct {
+	Response []storageGetResponse `json:"response"`
+}
+
+type storageGetResponse struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func storageGet(cfg configAPI, club configClub, params storageGetParams) ([]storageGetResponse, error) {
+	values := apiValues(club.AccessToken)
+
+	values.Set("keys", strings.Join(params.keys, ","))
+	values.Set("user_id", params.userID)
+
+	uri := apiURL("storage.get", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := storageGetResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+
+	return result.Response, nil
+}
+
+type storageSetParams struct {
+	key    string
+	value  string
+	userID string
+}
+
+type storageSetResult struct {
+	Response int `json:"response"`
+}
+
+func storageSet(cfg configAPI, club configClub, params storageSetParams) error {
+	values := apiValues(club.AccessToken)
+
+	values.Set("key", params.key)
+	values.Set("value", params.value)
+	values.Set("user_id", params.userID)
+
+	uri := apiURL("storage.set", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return err
+	}
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return err
+	}
+
+	result := storageSetResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+
+	if result.Response == 0 {
+		return errors.New("storage.set: failed to set")
+	}
+
+	return nil
+}
