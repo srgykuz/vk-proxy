@@ -9,12 +9,19 @@ import (
 
 func main() {
 	var cfgPath string
+	var printVersion bool
 	var genSecret bool
 
 	flag.StringVar(&cfgPath, "config", "config.json", "path to configuration file")
+	flag.BoolVar(&printVersion, "version", false, "print version")
 	flag.BoolVar(&genSecret, "secret", false, "generate secret")
 
 	flag.Parse()
+
+	if printVersion {
+		fmt.Fprintln(os.Stdout, "0.8")
+		os.Exit(0)
+	}
 
 	if genSecret {
 		secret, err := generateSecret()
