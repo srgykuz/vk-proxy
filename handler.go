@@ -81,6 +81,8 @@ func handleUpdate(cfg config, club configClub, upd update) error {
 		} else if shouldHandlePhoto(upd.Object.Text) {
 			datagrams, err = handlePhoto(cfg.API, cfg.QR, upd.Object.OrigPhoto.URL)
 		}
+	case updateTypeStorageChange:
+		encodedS = upd.Object.Text
 	default:
 		err = errors.New("unsupported update")
 	}

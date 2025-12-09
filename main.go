@@ -84,6 +84,16 @@ func main() {
 				os.Exit(1)
 			}
 		}(club)
+
+		wg.Add(1)
+		go func(club configClub) {
+			defer wg.Done()
+
+			if err := listenStorage(cfg, club); err != nil {
+				fmt.Fprintln(os.Stderr, "listen storage:", err)
+				os.Exit(1)
+			}
+		}(club)
 	}
 
 	wg.Add(1)

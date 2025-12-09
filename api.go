@@ -260,6 +260,7 @@ const (
 	updateTypeWallPostNew
 	updateTypeWallReplyNew
 	updateTypePhotoNew
+	updateTypeStorageChange
 )
 
 type update struct {
@@ -280,6 +281,8 @@ func (u update) TypeEnum() int {
 		return updateTypeWallReplyNew
 	case "photo_new":
 		return updateTypePhotoNew
+	case "storage_change":
+		return updateTypeStorageChange
 	default:
 		return 0
 	}

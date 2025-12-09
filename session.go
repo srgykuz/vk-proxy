@@ -19,6 +19,7 @@ const (
 	methodComment
 	methodDoc
 	methodQR
+	methodStorage
 )
 
 var (
@@ -37,6 +38,7 @@ func initSession(cfg config) error {
 		methodComment: true,
 		methodDoc:     true,
 		methodQR:      !cfg.API.Unathorized,
+		methodStorage: true,
 	}
 	methodsMaxLenEncoded = map[int]int{
 		methodMessage: 4096,
@@ -44,6 +46,7 @@ func initSession(cfg config) error {
 		methodComment: 16000,
 		methodDoc:     1 * 1024 * 1024,
 		methodQR:      qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
+		methodStorage: 4096,
 	}
 	methodsMaxLenPayload = map[int]int{
 		methodMessage: datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
@@ -51,6 +54,7 @@ func initSession(cfg config) error {
 		methodComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodComment] - datagramHeaderLenEncoded),
 		methodDoc:     datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
 		methodQR:      datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
+		methodStorage: datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
 	}
 
 	return nil
@@ -73,6 +77,19 @@ func setSession(id dgSes, ses *session) {
 	defer sessionsMu.Unlock()
 
 	sessions[id] = ses
+}
+
+func isSessionOpened() bool {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+
+	for _, ses := range sessions {
+		if !ses.isClosed() {
+			return true
+		}
+	}
+
+	return false
 }
 
 var sessionID dgSes = 0
@@ -337,6 +354,10 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 
 	s.mu.Unlock()
 
+	if dg.command != commandConnect {
+		smallMethods = append(smallMethods, methodStorage)
+	}
+
 	methods := []int{}
 	fragments := []datagram{}
 
@@ -430,6 +451,8 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodComment
 		case methodDoc:
 			f = s.executeMethodDoc
+		case methodStorage:
+			f = s.executeMethodStorage
 		default:
 			return fmt.Errorf("unknown method: %v", method)
 		}
@@ -547,7 +570,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	}
 
 	msg := strings.ReplaceAll(uri, ".", ". ")
-	methods := []int{methodMessage, methodPost}
+	methods := []int{methodMessage, methodPost, methodStorage}
 
 	if enabled := methodsEnabled[methodQR]; enabled {
 		methods = append(methods, methodQR)
@@ -572,6 +595,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodComment(msg)
 	case methodQR:
 		err = s.executeMethodQR([]string{zero}, msg)
+	case methodStorage:
+		err = s.executeMethodStorage(msg)
 	default:
 		err = fmt.Errorf("unknown method: %v", method)
 	}
@@ -619,6 +644,18 @@ func (s *session) executeMethodQR(encoded []string, caption string) error {
 	}
 
 	return nil
+}
+
+func (s *session) executeMethodStorage(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	p := storageSetParams{
+		key:    createStorageSetKey(),
+		value:  encoded,
+		userID: club.ID,
+	}
+	err := storageSet(s.cfg.API, club, p)
+
+	return err
 }
 
 func clearSession() error {
