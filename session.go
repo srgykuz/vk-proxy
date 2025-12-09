@@ -355,7 +355,7 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 	s.mu.Unlock()
 
 	if dg.command != commandConnect {
-		smallMethods = append(smallMethods, methodStorage)
+		smallMethods = append(smallMethods, methodStorage, methodStorage)
 	}
 
 	methods := []int{}
@@ -570,7 +570,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	}
 
 	msg := strings.ReplaceAll(uri, ".", ". ")
-	methods := []int{methodMessage, methodPost, methodStorage}
+	methods := []int{methodMessage, methodPost, methodStorage, methodStorage}
 
 	if enabled := methodsEnabled[methodQR]; enabled {
 		methods = append(methods, methodQR)
