@@ -83,6 +83,14 @@ func handleUpdate(cfg config, club configClub, upd update) error {
 		}
 	case updateTypeStorageChange:
 		encodedS = upd.Object.Text
+	case updateTypeGroupChangeSettings:
+		if len(upd.Object.Changes.Description.NewValue) > 0 {
+			encodedS = upd.Object.Changes.Description.NewValue
+		}
+
+		if len(upd.Object.Changes.Website.NewValue) > 0 {
+			encodedS = upd.Object.Changes.Website.NewValue
+		}
 	default:
 		err = errors.New("unsupported update")
 	}

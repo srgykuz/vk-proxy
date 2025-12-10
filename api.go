@@ -261,6 +261,7 @@ const (
 	updateTypeWallReplyNew
 	updateTypePhotoNew
 	updateTypeStorageChange
+	updateTypeGroupChangeSettings
 )
 
 type update struct {
@@ -283,20 +284,33 @@ func (u update) TypeEnum() int {
 		return updateTypePhotoNew
 	case "storage_change":
 		return updateTypeStorageChange
+	case "group_change_settings":
+		return updateTypeGroupChangeSettings
 	default:
 		return 0
 	}
 }
 
 type updateObject struct {
-	ID        int         `json:"id"`
-	Date      int         `json:"date"`
-	Text      string      `json:"text"`
-	OrigPhoto updatePhoto `json:"orig_photo"`
+	ID        int           `json:"id"`
+	Date      int           `json:"date"`
+	Text      string        `json:"text"`
+	OrigPhoto updatePhoto   `json:"orig_photo"`
+	Changes   updateChanges `json:"changes"`
 }
 
 type updatePhoto struct {
 	URL string `json:"url"`
+}
+
+type updateChanges struct {
+	Description updateChangeString `json:"description"`
+	Website     updateChangeString `json:"website"`
+}
+
+type updateChangeString struct {
+	OldValue string `json:"old_value"`
+	NewValue string `json:"new_value"`
 }
 
 func groupsUseLongPollServer(cfg configAPI, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {
@@ -852,7 +866,55 @@ func storageSet(cfg configAPI, club configClub, params storageSetParams) error {
 	}
 
 	if result.Response == 0 {
-		return errors.New("storage.set: failed to set")
+		return errors.New("storage.set: failed")
+	}
+
+	return nil
+}
+
+type groupsEditParams struct {
+	description string
+	website     string
+}
+
+type groupsEditResult struct {
+	Response int `json:"response"`
+}
+
+func groupsEdit(cfg configAPI, club configClub, params groupsEditParams) error {
+	values := apiValues(club.AccessToken)
+
+	values.Set("group_id", club.ID)
+
+	if len(params.description) > 0 {
+		values.Set("description", params.description)
+	}
+
+	if len(params.website) > 0 {
+		values.Set("website", params.website)
+	}
+
+	uri := apiURL("groups.edit", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return err
+	}
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return err
+	}
+
+	result := groupsEditResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+
+	if result.Response == 0 {
+		return errors.New("groups.edit: failed")
 	}
 
 	return nil

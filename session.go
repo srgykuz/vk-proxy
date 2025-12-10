@@ -20,6 +20,8 @@ const (
 	methodDoc
 	methodQR
 	methodStorage
+	methodDescription
+	methodWebsite
 )
 
 var (
@@ -33,28 +35,34 @@ var methodsMaxLenPayload = map[int]int{}
 
 func initSession(cfg config) error {
 	methodsEnabled = map[int]bool{
-		methodMessage: true,
-		methodPost:    true,
-		methodComment: true,
-		methodDoc:     true,
-		methodQR:      !cfg.API.Unathorized,
-		methodStorage: true,
+		methodMessage:     true,
+		methodPost:        true,
+		methodComment:     true,
+		methodDoc:         true,
+		methodQR:          !cfg.API.Unathorized,
+		methodStorage:     true,
+		methodDescription: true,
+		methodWebsite:     true,
 	}
 	methodsMaxLenEncoded = map[int]int{
-		methodMessage: 4096,
-		methodPost:    16000,
-		methodComment: 16000,
-		methodDoc:     1 * 1024 * 1024,
-		methodQR:      qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
-		methodStorage: 4096,
+		methodMessage:     4096,
+		methodPost:        16000,
+		methodComment:     16000,
+		methodDoc:         1 * 1024 * 1024,
+		methodQR:          qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
+		methodStorage:     4096,
+		methodDescription: 4000,
+		methodWebsite:     255,
 	}
 	methodsMaxLenPayload = map[int]int{
-		methodMessage: datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
-		methodPost:    datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
-		methodComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodComment] - datagramHeaderLenEncoded),
-		methodDoc:     datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
-		methodQR:      datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
-		methodStorage: datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
+		methodMessage:     datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
+		methodPost:        datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
+		methodComment:     datagramCalcMaxLen(methodsMaxLenEncoded[methodComment] - datagramHeaderLenEncoded),
+		methodDoc:         datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
+		methodQR:          datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
+		methodStorage:     datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
+		methodDescription: datagramCalcMaxLen(methodsMaxLenEncoded[methodDescription] - datagramHeaderLenEncoded),
+		methodWebsite:     datagramCalcMaxLen(methodsMaxLenEncoded[methodWebsite] - datagramHeaderLenEncoded),
 	}
 
 	return nil
@@ -453,6 +461,10 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodDoc
 		case methodStorage:
 			f = s.executeMethodStorage
+		case methodDescription:
+			f = s.executeMethodDescription
+		case methodWebsite:
+			f = s.executeMethodWebsite
 		default:
 			return fmt.Errorf("unknown method: %v", method)
 		}
@@ -570,7 +582,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	}
 
 	msg := strings.ReplaceAll(uri, ".", ". ")
-	methods := []int{methodMessage, methodPost, methodStorage, methodStorage}
+	methods := []int{methodMessage, methodPost, methodStorage, methodStorage, methodDescription, methodWebsite}
 
 	if enabled := methodsEnabled[methodQR]; enabled {
 		methods = append(methods, methodQR)
@@ -597,6 +609,10 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodQR([]string{zero}, msg)
 	case methodStorage:
 		err = s.executeMethodStorage(msg)
+	case methodDescription:
+		err = s.executeMethodDescription(msg)
+	case methodWebsite:
+		err = s.executeMethodWebsite(msg)
 	default:
 		err = fmt.Errorf("unknown method: %v", method)
 	}
@@ -654,6 +670,26 @@ func (s *session) executeMethodStorage(encoded string) error {
 		userID: club.ID,
 	}
 	err := storageSet(s.cfg.API, club, p)
+
+	return err
+}
+
+func (s *session) executeMethodDescription(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	p := groupsEditParams{
+		description: encoded,
+	}
+	err := groupsEdit(s.cfg.API, club, p)
+
+	return err
+}
+
+func (s *session) executeMethodWebsite(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	p := groupsEditParams{
+		website: encoded,
+	}
+	err := groupsEdit(s.cfg.API, club, p)
 
 	return err
 }
