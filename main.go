@@ -52,6 +52,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	for _, club := range cfg.Clubs {
+		if err := validateLongPoll(cfg.API, club); err != nil {
+			fmt.Fprintln(os.Stderr, "validate long poll:", club.Name+":", err)
+			os.Exit(1)
+		}
+	}
+
 	if err := configureLogger(cfg.Log); err != nil {
 		fmt.Fprintln(os.Stderr, "configure logger:", err)
 		os.Exit(1)

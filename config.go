@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -223,6 +224,38 @@ func validateQR(cfg configQR) error {
 
 	if content != decoded[0] {
 		return errors.New("encoded and decoded content mismatch")
+	}
+
+	return nil
+}
+
+func validateLongPoll(cfg configAPI, club configClub) error {
+	settings, err := groupsGetLongPollSettings(cfg, club)
+
+	if err != nil {
+		return err
+	}
+
+	if !settings.IsEnabled {
+		return errors.New("disabled")
+	}
+
+	required := []string{
+		"message_reply",
+		"photo_new",
+		"photo_comment_new",
+		"video_comment_new",
+		"wall_post_new",
+		"wall_reply_new",
+		"group_change_settings",
+	}
+
+	for _, event := range required {
+		enabled, exists := settings.Events[event]
+
+		if !exists || enabled == 0 {
+			return fmt.Errorf("%v disabled", event)
+		}
 	}
 
 	return nil

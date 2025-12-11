@@ -357,6 +357,42 @@ func groupsUseLongPollServer(cfg configAPI, server groupsGetLongPollServerRespon
 	return result, nil
 }
 
+type groupsGetLongPollSettingsResult struct {
+	Response groupsGetLongPollSettingsResponse `json:"response"`
+}
+
+type groupsGetLongPollSettingsResponse struct {
+	IsEnabled bool           `json:"is_enabled"`
+	Events    map[string]int `json:"events"`
+}
+
+func groupsGetLongPollSettings(cfg configAPI, club configClub) (groupsGetLongPollSettingsResponse, error) {
+	values := apiValues(club.AccessToken)
+
+	values.Set("group_id", club.ID)
+
+	uri := apiURL("groups.getLongPollSettings", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return groupsGetLongPollSettingsResponse{}, err
+	}
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return groupsGetLongPollSettingsResponse{}, err
+	}
+
+	result := groupsGetLongPollSettingsResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return groupsGetLongPollSettingsResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
 type wallPostParams struct {
 	message string
 }
