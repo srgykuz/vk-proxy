@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
+	"encoding/ascii85"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -61,7 +61,7 @@ func (dg datagram) Len() int {
 }
 
 func (dg datagram) LenEncoded() int {
-	return 4 * int(math.Ceil(float64(dg.Len())/3))
+	return 5 * int(math.Ceil(float64(dg.Len())/4))
 }
 
 func (dg datagram) isLoopback() bool {
@@ -79,11 +79,11 @@ func (dg datagram) clone() datagram {
 }
 
 func datagramCalcMaxLen(maxLenEncoded int) int {
-	max := 3 * float64(maxLenEncoded) / 4
-	min := max - 3
-	isValidBase64Len := maxLenEncoded%4 == 0
+	max := 4 * float64(maxLenEncoded) / 5
+	min := max - 4
+	isValidBase85Len := maxLenEncoded%5 == 0
 
-	if isValidBase64Len {
+	if isValidBase85Len {
 		return int(max)
 	}
 
@@ -116,13 +116,17 @@ func encodeDatagram(dg datagram) string {
 	crc := crc32.ChecksumIEEE(data)
 	binary.BigEndian.PutUint32(data[2:6], crc)
 
-	s := base64.StdEncoding.EncodeToString(data)
+	b := make([]byte, ascii85.MaxEncodedLen(len(data)))
+	n := ascii85.Encode(b, data)
+	s := string(b[:n])
 
 	return s
 }
 
 func decodeDatagram(s string) (datagram, error) {
-	data, err := base64.StdEncoding.DecodeString(s)
+	b := make([]byte, len(s))
+	n, _, err := ascii85.Decode(b, []byte(s), true)
+	data := b[:n]
 
 	if err != nil {
 		return datagram{}, err
