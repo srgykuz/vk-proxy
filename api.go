@@ -13,7 +13,10 @@ import (
 	"strings"
 )
 
-var errUnathorizedUser = errors.New("user is not authorized")
+var (
+	errUnathorizedUser = errors.New("user is not authorized")
+	errFloodControl    = errors.New("flood control")
+)
 
 func apiURL(method string, values url.Values) string {
 	method = strings.TrimPrefix(method, "/")
@@ -144,11 +147,14 @@ type errorResponse struct {
 }
 
 func (r errorResponse) check() error {
-	if r.ErrorCode != 0 {
+	switch r.ErrorCode {
+	case 0:
+		return nil
+	case 9:
+		return errFloodControl
+	default:
 		return fmt.Errorf("code %d: %s", r.ErrorCode, r.ErrorMsg)
 	}
-
-	return nil
 }
 
 type messagesSendParams struct {
