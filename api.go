@@ -268,6 +268,7 @@ const (
 	updateTypePhotoNew
 	updateTypeStorageChange
 	updateTypeGroupChangeSettings
+	updateTypeVideoCommentNew
 )
 
 type update struct {
@@ -292,6 +293,8 @@ func (u update) TypeEnum() int {
 		return updateTypeStorageChange
 	case "group_change_settings":
 		return updateTypeGroupChangeSettings
+	case "video_comment_new":
+		return updateTypeVideoCommentNew
 	default:
 		return 0
 	}
@@ -921,6 +924,59 @@ func groupsEdit(cfg configAPI, club configClub, params groupsEditParams) error {
 
 	if result.Response == 0 {
 		return errors.New("groups.edit: failed")
+	}
+
+	return nil
+}
+
+type videoCreateCommentParams struct {
+	message string
+}
+
+type videoCreateCommentResult struct {
+	Response int `json:"response"`
+}
+
+func videoCreateComment(cfg configAPI, club configClub, user configUser, params videoCreateCommentParams) error {
+	if cfg.Unathorized {
+		return errUnathorizedUser
+	}
+
+	form := map[string]string{
+		"owner_id": "-" + club.ID,
+		"video_id": club.VideoID,
+		"message":  params.message,
+	}
+	body, ct, err := apiForm(form, nil)
+
+	if err != nil {
+		return err
+	}
+
+	values := apiValues(user.AccessToken)
+	uri := apiURL("video.createComment", values)
+	req, err := http.NewRequest(http.MethodPost, uri, body)
+
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", ct)
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return err
+	}
+
+	result := videoCreateCommentResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+
+	if result.Response == 0 {
+		return errors.New("video.createComment: failed")
 	}
 
 	return nil

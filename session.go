@@ -22,6 +22,7 @@ const (
 	methodStorage
 	methodDescription
 	methodWebsite
+	methodVideoComment
 )
 
 var (
@@ -35,34 +36,37 @@ var methodsMaxLenPayload = map[int]int{}
 
 func initSession(cfg config) error {
 	methodsEnabled = map[int]bool{
-		methodMessage:     true,
-		methodPost:        true,
-		methodComment:     true,
-		methodDoc:         true,
-		methodQR:          !cfg.API.Unathorized,
-		methodStorage:     true,
-		methodDescription: true,
-		methodWebsite:     true,
+		methodMessage:      true,
+		methodPost:         true,
+		methodComment:      true,
+		methodDoc:          true,
+		methodQR:           !cfg.API.Unathorized,
+		methodStorage:      true,
+		methodDescription:  true,
+		methodWebsite:      true,
+		methodVideoComment: !cfg.API.Unathorized,
 	}
 	methodsMaxLenEncoded = map[int]int{
-		methodMessage:     4096,
-		methodPost:        16000,
-		methodComment:     16000,
-		methodDoc:         1 * 1024 * 1024,
-		methodQR:          qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
-		methodStorage:     4096,
-		methodDescription: 4000,
-		methodWebsite:     255,
+		methodMessage:      4096,
+		methodPost:         16000,
+		methodComment:      16000,
+		methodDoc:          1 * 1024 * 1024,
+		methodQR:           qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
+		methodStorage:      4096,
+		methodDescription:  4000,
+		methodWebsite:      255,
+		methodVideoComment: 4096,
 	}
 	methodsMaxLenPayload = map[int]int{
-		methodMessage:     datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
-		methodPost:        datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
-		methodComment:     datagramCalcMaxLen(methodsMaxLenEncoded[methodComment] - datagramHeaderLenEncoded),
-		methodDoc:         datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
-		methodQR:          datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
-		methodStorage:     datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
-		methodDescription: datagramCalcMaxLen(methodsMaxLenEncoded[methodDescription] - datagramHeaderLenEncoded),
-		methodWebsite:     datagramCalcMaxLen(methodsMaxLenEncoded[methodWebsite] - datagramHeaderLenEncoded),
+		methodMessage:      datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
+		methodPost:         datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
+		methodComment:      datagramCalcMaxLen(methodsMaxLenEncoded[methodComment] - datagramHeaderLenEncoded),
+		methodDoc:          datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
+		methodQR:           datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
+		methodStorage:      datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
+		methodDescription:  datagramCalcMaxLen(methodsMaxLenEncoded[methodDescription] - datagramHeaderLenEncoded),
+		methodWebsite:      datagramCalcMaxLen(methodsMaxLenEncoded[methodWebsite] - datagramHeaderLenEncoded),
+		methodVideoComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodVideoComment] - datagramHeaderLenEncoded),
 	}
 
 	return nil
@@ -354,6 +358,10 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 		smallMethods = append(smallMethods, methodQR)
 	}
 
+	if enabled := methodsEnabled[methodVideoComment]; enabled {
+		smallMethods = append(smallMethods, methodVideoComment)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
@@ -465,6 +473,8 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodDescription
 		case methodWebsite:
 			f = s.executeMethodWebsite
+		case methodVideoComment:
+			f = s.executeMethodVideoComment
 		default:
 			return fmt.Errorf("unknown method: %v", method)
 		}
@@ -588,6 +598,10 @@ func (s *session) executeMethodDoc(encoded string) error {
 		methods = append(methods, methodQR)
 	}
 
+	if enabled := methodsEnabled[methodVideoComment]; enabled {
+		methods = append(methods, methodVideoComment)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
@@ -613,6 +627,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodDescription(msg)
 	case methodWebsite:
 		err = s.executeMethodWebsite(msg)
+	case methodVideoComment:
+		err = s.executeMethodVideoComment(msg)
 	default:
 		err = fmt.Errorf("unknown method: %v", method)
 	}
@@ -690,6 +706,17 @@ func (s *session) executeMethodWebsite(encoded string) error {
 		website: encoded,
 	}
 	err := groupsEdit(s.cfg.API, club, p)
+
+	return err
+}
+
+func (s *session) executeMethodVideoComment(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	user := randElem(s.cfg.Users)
+	p := videoCreateCommentParams{
+		message: encoded,
+	}
+	err := videoCreateComment(s.cfg.API, club, user, p)
 
 	return err
 }

@@ -91,6 +91,8 @@ func handleUpdate(cfg config, club configClub, upd update) error {
 		if len(upd.Object.Changes.Website.NewValue) > 0 {
 			encodedS = upd.Object.Changes.Website.NewValue
 		}
+	case updateTypeVideoCommentNew:
+		encodedS = upd.Object.Text
 	default:
 		err = errors.New("unsupported update")
 	}
