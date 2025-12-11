@@ -56,7 +56,7 @@ func (cfg configAPI) Timeout() time.Duration {
 }
 
 type configQR struct {
-	Enabled    bool   `json:"-"`
+	Disabled   bool   `json:"-"`
 	ZBarPath   string `json:"zbarPath"`
 	ImageSize  int    `json:"-"`
 	ImageLevel int    `json:"-"`
@@ -96,7 +96,7 @@ func defaultConfig() config {
 			TimeoutMS: 10 * 1000,
 		},
 		QR: configQR{
-			Enabled:    true,
+			Disabled:   false,
 			ZBarPath:   "zbarimg",
 			ImageSize:  512,
 			ImageLevel: 1,
@@ -131,7 +131,7 @@ func parseConfig(name string) (config, error) {
 		cfg.Session.SecretKey = key
 	}
 
-	cfg.QR.Enabled = !cfg.API.Unathorized
+	cfg.QR.Disabled = cfg.API.Unathorized || len(cfg.QR.ZBarPath) == 0
 
 	return cfg, nil
 }
@@ -193,7 +193,7 @@ func validateConfig(cfg config) error {
 }
 
 func validateQR(cfg configQR) error {
-	if !cfg.Enabled {
+	if cfg.Disabled {
 		return nil
 	}
 

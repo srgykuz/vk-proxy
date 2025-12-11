@@ -41,7 +41,7 @@ func initSession(cfg config) error {
 		methodPost:         true,
 		methodComment:      true,
 		methodDoc:          true,
-		methodQR:           !cfg.API.Unathorized,
+		methodQR:           !cfg.QR.Disabled,
 		methodStorage:      true,
 		methodDescription:  true,
 		methodWebsite:      true,
