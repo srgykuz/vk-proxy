@@ -67,6 +67,7 @@ type configClub struct {
 	ID          string `json:"id"`
 	AccessToken string `json:"accessToken"`
 	AlbumID     string `json:"albumID"`
+	PhotoID     string `json:"photoID"`
 	VideoID     string `json:"videoID"`
 }
 
@@ -158,6 +159,10 @@ func validateConfig(cfg config) error {
 
 		if club.AlbumID == "" {
 			return errors.New("club.albumID is missing")
+		}
+
+		if club.PhotoID == "" {
+			return errors.New("club.photoID is missing")
 		}
 
 		if club.VideoID == "" {

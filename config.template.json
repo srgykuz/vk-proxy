@@ -21,6 +21,7 @@
             "id": "",
             "accessToken": "",
             "albumID": "",
+            "photoID": "",
             "videoID": ""
         }
     ],

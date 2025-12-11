@@ -23,6 +23,7 @@ const (
 	methodDescription
 	methodWebsite
 	methodVideoComment
+	methodPhotoComment
 )
 
 var (
@@ -45,6 +46,7 @@ func initSession(cfg config) error {
 		methodDescription:  true,
 		methodWebsite:      true,
 		methodVideoComment: !cfg.API.Unathorized,
+		methodPhotoComment: !cfg.API.Unathorized,
 	}
 	methodsMaxLenEncoded = map[int]int{
 		methodMessage:      4096,
@@ -56,6 +58,7 @@ func initSession(cfg config) error {
 		methodDescription:  4000,
 		methodWebsite:      255,
 		methodVideoComment: 4096,
+		methodPhotoComment: 2048,
 	}
 	methodsMaxLenPayload = map[int]int{
 		methodMessage:      datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
@@ -67,6 +70,7 @@ func initSession(cfg config) error {
 		methodDescription:  datagramCalcMaxLen(methodsMaxLenEncoded[methodDescription] - datagramHeaderLenEncoded),
 		methodWebsite:      datagramCalcMaxLen(methodsMaxLenEncoded[methodWebsite] - datagramHeaderLenEncoded),
 		methodVideoComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodVideoComment] - datagramHeaderLenEncoded),
+		methodPhotoComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodPhotoComment] - datagramHeaderLenEncoded),
 	}
 
 	return nil
@@ -362,6 +366,10 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 		smallMethods = append(smallMethods, methodVideoComment)
 	}
 
+	if enabled := methodsEnabled[methodPhotoComment]; enabled {
+		smallMethods = append(smallMethods, methodPhotoComment)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
@@ -377,7 +385,9 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 	methods := []int{}
 	fragments := []datagram{}
 
-	if dg.command != commandForward || dg.LenEncoded() <= methodsMaxLenEncoded[methodQR] {
+	maxSmallForwardLen := min(methodsMaxLenEncoded[methodQR], methodsMaxLenEncoded[methodPhotoComment])
+
+	if dg.command != commandForward || dg.LenEncoded() <= maxSmallForwardLen {
 		if dg.number == 0 {
 			dg.number = s.nextNumber()
 		}
@@ -475,6 +485,8 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodWebsite
 		case methodVideoComment:
 			f = s.executeMethodVideoComment
+		case methodPhotoComment:
+			f = s.executeMethodPhotoComment
 		default:
 			return fmt.Errorf("unknown method: %v", method)
 		}
@@ -602,6 +614,10 @@ func (s *session) executeMethodDoc(encoded string) error {
 		methods = append(methods, methodVideoComment)
 	}
 
+	if enabled := methodsEnabled[methodPhotoComment]; enabled {
+		methods = append(methods, methodPhotoComment)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
@@ -629,6 +645,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodWebsite(msg)
 	case methodVideoComment:
 		err = s.executeMethodVideoComment(msg)
+	case methodPhotoComment:
+		err = s.executeMethodPhotoComment(msg)
 	default:
 		err = fmt.Errorf("unknown method: %v", method)
 	}
@@ -717,6 +735,17 @@ func (s *session) executeMethodVideoComment(encoded string) error {
 		message: encoded,
 	}
 	err := videoCreateComment(s.cfg.API, club, user, p)
+
+	return err
+}
+
+func (s *session) executeMethodPhotoComment(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	user := randElem(s.cfg.Users)
+	p := photosCreateCommentParams{
+		message: encoded,
+	}
+	err := photosCreateComment(s.cfg.API, club, user, p)
 
 	return err
 }
