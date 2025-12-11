@@ -604,7 +604,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	}
 
 	msg := strings.ReplaceAll(uri, ".", ". ")
-	methods := []int{methodMessage, methodPost, methodStorage, methodStorage, methodDescription, methodWebsite}
+	methods := []int{methodMessage, methodPost, methodStorage, methodStorage /*, methodDescription, methodWebsite*/}
 
 	if enabled := methodsEnabled[methodQR]; enabled {
 		methods = append(methods, methodQR)
