@@ -116,17 +116,13 @@ func encodeDatagram(dg datagram) string {
 	crc := crc32.ChecksumIEEE(data)
 	binary.BigEndian.PutUint32(data[2:6], crc)
 
-	b := make([]byte, ascii85.MaxEncodedLen(len(data)))
-	n := ascii85.Encode(b, data)
-	s := string(b[:n])
+	s := base85Encode(data)
 
 	return s
 }
 
 func decodeDatagram(s string) (datagram, error) {
-	b := make([]byte, len(s))
-	n, _, err := ascii85.Decode(b, []byte(s), true)
-	data := b[:n]
+	data, err := base85Decode(s)
 
 	if err != nil {
 		return datagram{}, err
@@ -207,4 +203,51 @@ func (pld *payloadRetry) decode(data []byte) error {
 	pld.number = dgNum(binary.BigEndian.Uint32(data))
 
 	return nil
+}
+
+const datagramEncodingWidth = 2
+
+var (
+	base85CharsetOld = []rune("!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstu")
+	base85CharsetNew = []rune("абвгдеёжзийклмн0123456789опрстуфABCDEFGHIJKLMNOPQRSTUVWXYZхцчшщъabcdefghijklmnopqrstu")
+)
+
+func base85Encode(in []byte) string {
+	dst := make([]byte, ascii85.MaxEncodedLen(len(in)))
+	n := ascii85.Encode(dst, in)
+	dst = dst[:n]
+	dst = bytes.Map(func(r rune) rune {
+		for i, rold := range base85CharsetOld {
+			rnew := base85CharsetNew[i]
+
+			if r == rold {
+				return rnew
+			}
+		}
+
+		return r
+	}, dst)
+	out := string(dst)
+
+	return out
+}
+
+func base85Decode(in string) ([]byte, error) {
+	src := []byte(in)
+	src = bytes.Map(func(r rune) rune {
+		for i, rnew := range base85CharsetNew {
+			rold := base85CharsetOld[i]
+
+			if r == rnew {
+				return rold
+			}
+		}
+
+		return r
+	}, src)
+	dst := make([]byte, len(in))
+	n, _, err := ascii85.Decode(dst, src, true)
+	out := dst[:n]
+
+	return out, err
 }

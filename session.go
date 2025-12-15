@@ -48,14 +48,20 @@ func initSession(cfg config) error {
 		methodVideoComment: !cfg.API.Unathorized,
 		methodPhotoComment: !cfg.API.Unathorized,
 	}
+	qrMaxLenEncoded := map[qrLevel]int{
+		qrLevelLow:     qrMaxLen[qrLevelLow] / datagramEncodingWidth,
+		qrLevelMedium:  qrMaxLen[qrLevelMedium] / datagramEncodingWidth,
+		qrLevelHigh:    qrMaxLen[qrLevelHigh] / datagramEncodingWidth,
+		qrLevelHighest: qrMaxLen[qrLevelHighest] / datagramEncodingWidth,
+	}
 	methodsMaxLenEncoded = map[int]int{
 		methodMessage:      4096,
 		methodPost:         16000,
 		methodComment:      16000,
 		methodDoc:          1 * 1024 * 1024,
-		methodQR:           qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
-		methodStorage:      4096,
-		methodDescription:  4000,
+		methodQR:           qrMaxLenEncoded[qrLevel(cfg.QR.ImageLevel)],
+		methodStorage:      1735,
+		methodDescription:  1735,
 		methodWebsite:      255,
 		methodVideoComment: 4096,
 		methodPhotoComment: 2048,
@@ -358,7 +364,7 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 	smallMethods := []int{methodMessage, methodPost}
 	bigMethods := []int{methodDoc}
 
-	if enabled := methodsEnabled[methodQR]; enabled {
+	if enabled := methodsEnabled[methodQR]; enabled && dg.LenEncoded() <= methodsMaxLenEncoded[methodQR] {
 		smallMethods = append(smallMethods, methodQR)
 	}
 
@@ -385,9 +391,7 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 	methods := []int{}
 	fragments := []datagram{}
 
-	maxSmallForwardLen := min(methodsMaxLenEncoded[methodQR], methodsMaxLenEncoded[methodPhotoComment])
-
-	if dg.command != commandForward || dg.LenEncoded() <= maxSmallForwardLen {
+	if dg.command != commandForward || dg.LenEncoded() <= methodsMaxLenEncoded[methodStorage] {
 		if dg.number == 0 {
 			dg.number = s.nextNumber()
 		}
