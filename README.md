@@ -277,11 +277,13 @@ tail -n 100 /var/log/vk-proxy/output.log
 
 #### 1. Скачайте архив
 
-Откройте [Releases](https://github.com/srgykuz/vk-proxy/releases), раскройте Assets последней версии, скачайте версию для вашей ОС.
+Откройте [Releases](https://github.com/srgykuz/vk-proxy/releases), раскройте Assets последней версии, скачайте `Source code`. `zip` для Windows, `tar.gz` для Linux и Mac.
 
 #### 2. Установите программу
 
 Распакуйте архив, перейдите в созданную папку, откройте её в терминале.
+
+Клонируйте файл `config.template.json`, назовите новый файл `config.json`.
 
 Выполните:
 
@@ -291,7 +293,7 @@ docker compose build
 
 #### 3. Сгенерируйте секрет
 
-Выполните [это](#4-сгенерируйте-секрет). Используйте эту команду:
+Выполните [это](#4-сгенерируйте-секрет). Используйте команду:
 
 ```bash
 docker compose run --rm vk-proxy -secret
