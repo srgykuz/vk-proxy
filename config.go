@@ -196,7 +196,7 @@ func validateQR(cfg configQR) error {
 		return nil
 	}
 
-	content := "test-тест"
+	content := "test"
 	data, err := encodeQR(cfg, content)
 
 	if err != nil {

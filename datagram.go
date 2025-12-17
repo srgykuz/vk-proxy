@@ -102,7 +102,7 @@ func newDatagram(ses dgSes, num dgNum, cmd dgCmd, pld []byte) datagram {
 	}
 }
 
-func encodeDatagram(dg datagram) string {
+func encodeDatagram(dg datagram, enc int) string {
 	data := make([]byte, 0, dg.Len())
 
 	data = binary.BigEndian.AppendUint16(data, uint16(dg.version))
@@ -116,7 +116,7 @@ func encodeDatagram(dg datagram) string {
 	crc := crc32.ChecksumIEEE(data)
 	binary.BigEndian.PutUint32(data[2:6], crc)
 
-	s := base85Encode(data)
+	s := base85Encode(data, enc)
 
 	return s
 }
@@ -205,47 +205,67 @@ func (pld *payloadRetry) decode(data []byte) error {
 	return nil
 }
 
-const datagramEncodingWidth = 2
-
-var (
-	base85CharsetOld = []rune("!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstu")
-	base85CharsetNew = []rune("абвгдеёжзийклмн0123456789опрстуфABCDEFGHIJKLMNOPQRSTUVWXYZхцчшщъabcdefghijklmnopqrstu")
+const (
+	datagramEncodingASCII = iota + 1
+	datagramEncodingRU
 )
 
-func base85Encode(in []byte) string {
+var (
+	base85CharsetASCII = []rune("!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstu")
+	base85CharsetRU    = []rune("абвгдеёжзийклмн0123456789опрстуфABCDEFGHIJKLMNOPQRSTUVWXYZхцчшщъabcdefghijklmnopqrstu")
+)
+
+func base85Encode(in []byte, enc int) string {
 	dst := make([]byte, ascii85.MaxEncodedLen(len(in)))
 	n := ascii85.Encode(dst, in)
 	dst = dst[:n]
-	dst = bytes.Map(func(r rune) rune {
-		for i, rold := range base85CharsetOld {
-			rnew := base85CharsetNew[i]
 
-			if r == rold {
-				return rnew
+	if enc == datagramEncodingRU {
+		dst = bytes.Map(func(r rune) rune {
+			for i, rASCII := range base85CharsetASCII {
+				rRU := base85CharsetRU[i]
+
+				if r == rASCII {
+					return rRU
+				}
 			}
-		}
 
-		return r
-	}, dst)
+			return r
+		}, dst)
+	}
+
 	out := string(dst)
 
 	return out
 }
 
 func base85Decode(in string) ([]byte, error) {
-	src := []byte(in)
-	src = bytes.Map(func(r rune) rune {
-		for i, rnew := range base85CharsetNew {
-			rold := base85CharsetOld[i]
+	enc := datagramEncodingASCII
 
-			if r == rnew {
-				return rold
-			}
+	for _, r := range in {
+		if r > 127 {
+			enc = datagramEncodingRU
+			break
 		}
+	}
 
-		return r
-	}, src)
-	dst := make([]byte, len(in))
+	src := []byte(in)
+
+	if enc == datagramEncodingRU {
+		src = bytes.Map(func(r rune) rune {
+			for i, rASCII := range base85CharsetASCII {
+				rRU := base85CharsetRU[i]
+
+				if r == rRU {
+					return rASCII
+				}
+			}
+
+			return r
+		}, src)
+	}
+
+	dst := make([]byte, len(src))
 	n, _, err := ascii85.Decode(dst, src, true)
 	out := dst[:n]
 
