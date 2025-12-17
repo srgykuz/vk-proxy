@@ -211,7 +211,8 @@ const (
 )
 
 var (
-	base85CharsetASCII = []rune("!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstu")
+	base85CharsetStd   = []rune("!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstu")
+	base85CharsetASCII = []rune("!v#$%}x()*+,-.{0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[w]^_yabcdefghijklmnopqrstu")
 	base85CharsetRU    = []rune("абвгдеёжзийклмн0123456789опрстуфABCDEFGHIJKLMNOPQRSTUVWXYZхцчшщъabcdefghijklmnopqrstu")
 )
 
@@ -220,54 +221,59 @@ func base85Encode(in []byte, enc int) string {
 	n := ascii85.Encode(dst, in)
 	dst = dst[:n]
 
-	if enc == datagramEncodingRU {
-		dst = bytes.Map(func(r rune) rune {
-			for i, rASCII := range base85CharsetASCII {
-				rRU := base85CharsetRU[i]
+	var setOld, setNew []rune
 
-				if r == rASCII {
-					return rRU
-				}
-			}
-
-			return r
-		}, dst)
+	if enc == datagramEncodingASCII {
+		setOld = base85CharsetStd
+		setNew = base85CharsetASCII
+	} else {
+		setOld = base85CharsetStd
+		setNew = base85CharsetRU
 	}
 
+	dst = bytes.Map(base85Mapping(setOld, setNew), dst)
 	out := string(dst)
 
 	return out
 }
 
 func base85Decode(in string) ([]byte, error) {
-	enc := datagramEncodingASCII
+	setOld := base85CharsetASCII
+	setNew := base85CharsetStd
 
 	for _, r := range in {
 		if r > 127 {
-			enc = datagramEncodingRU
+			setOld = base85CharsetRU
 			break
 		}
 	}
 
 	src := []byte(in)
+	src = bytes.Map(base85Mapping(setOld, setNew), src)
 
-	if enc == datagramEncodingRU {
-		src = bytes.Map(func(r rune) rune {
-			for i, rASCII := range base85CharsetASCII {
-				rRU := base85CharsetRU[i]
-
-				if r == rRU {
-					return rASCII
-				}
-			}
-
-			return r
-		}, src)
-	}
-
-	dst := make([]byte, len(src))
+	dst := make([]byte, ascii85.MaxEncodedLen(len(in)))
 	n, _, err := ascii85.Decode(dst, src, true)
 	out := dst[:n]
 
 	return out, err
+}
+
+func base85Mapping(setOld, setNew []rune) func(r rune) rune {
+	if len(setOld) != len(setNew) {
+		return func(r rune) rune {
+			return '0'
+		}
+	}
+
+	return func(r rune) rune {
+		for i, rOld := range setOld {
+			rNew := setNew[i]
+
+			if r == rOld {
+				return rNew
+			}
+		}
+
+		return r
+	}
 }
