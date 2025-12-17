@@ -68,8 +68,8 @@ func initSession(cfg config) error {
 		methodDoc:          1 * 1024 * 1024,
 		methodQR:           qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
 		methodStorage:      4096,
-		methodDescription:  2800,
-		methodWebsite:      175,
+		methodDescription:  3000,
+		methodWebsite:      200,
 		methodVideoComment: 4096,
 		methodPhotoComment: 2048,
 	}
