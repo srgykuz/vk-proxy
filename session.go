@@ -687,7 +687,7 @@ func (s *session) executeMethodQR(encoded []string, caption string) error {
 	}
 
 	if len(caption) == 0 {
-		zero := encodeDatagram(newDatagram(0, 0, 0, nil), datagramEncodingASCII)
+		zero := encodeDatagram(newDatagram(0, 0, 0, nil), datagramEncodingRU)
 		caption = zero
 	}
 
