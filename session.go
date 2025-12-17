@@ -32,6 +32,7 @@ var (
 )
 
 var methodsEnabled = map[int]bool{}
+var methodsEncoding = map[int]int{}
 var methodsMaxLenEncoded = map[int]int{}
 var methodsMaxLenPayload = map[int]int{}
 
@@ -48,6 +49,18 @@ func initSession(cfg config) error {
 		methodVideoComment: !cfg.API.Unathorized,
 		methodPhotoComment: !cfg.API.Unathorized,
 	}
+	methodsEncoding = map[int]int{
+		methodMessage:      datagramEncodingRU,
+		methodPost:         datagramEncodingRU,
+		methodComment:      datagramEncodingRU,
+		methodDoc:          datagramEncodingASCII,
+		methodQR:           datagramEncodingASCII,
+		methodStorage:      datagramEncodingASCII,
+		methodDescription:  datagramEncodingASCII,
+		methodWebsite:      datagramEncodingASCII,
+		methodVideoComment: datagramEncodingRU,
+		methodPhotoComment: datagramEncodingRU,
+	}
 	methodsMaxLenEncoded = map[int]int{
 		methodMessage:      4096,
 		methodPost:         16000,
@@ -55,8 +68,8 @@ func initSession(cfg config) error {
 		methodDoc:          1 * 1024 * 1024,
 		methodQR:           qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
 		methodStorage:      4096,
-		methodDescription:  4000,
-		methodWebsite:      255,
+		methodDescription:  3000,
+		methodWebsite:      200,
 		methodVideoComment: 4096,
 		methodPhotoComment: 2048,
 	}
@@ -491,7 +504,7 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			return fmt.Errorf("unknown method: %v", method)
 		}
 
-		encoded := encodeDatagram(fg)
+		encoded := encodeDatagram(fg, methodsEncoding[method])
 		slog.Debug("session: send", "id", s.id, "method", method, "dg", fg)
 
 		s.wg.Add(1)
@@ -508,7 +521,7 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 		encoded := make([]string, len(qrs))
 
 		for i, fg := range qrs {
-			encoded[i] = encodeDatagram(fg)
+			encoded[i] = encodeDatagram(fg, methodsEncoding[methodQR])
 			slog.Debug("session: send", "id", s.id, "method", methodQR, "dg", fg)
 		}
 
@@ -593,7 +606,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 		return err
 	}
 
-	zero := encodeDatagram(newDatagram(0, 0, 0, nil))
+	zero := encodeDatagram(newDatagram(0, 0, 0, nil), datagramEncodingASCII)
 	arg := "caption=" + url.QueryEscape(zero)
 	uri := resp.Doc.URL
 
@@ -674,7 +687,7 @@ func (s *session) executeMethodQR(encoded []string, caption string) error {
 	}
 
 	if len(caption) == 0 {
-		zero := encodeDatagram(newDatagram(0, 0, 0, nil))
+		zero := encodeDatagram(newDatagram(0, 0, 0, nil), datagramEncodingRU)
 		caption = zero
 	}
 
