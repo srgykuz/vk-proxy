@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 )
@@ -104,6 +105,10 @@ func decideStorageNamespace(value string) {
 	defer storageMu.Unlock()
 
 	if time.Since(storageNamespaceChangedAt) < 10*time.Second {
+		return
+	}
+
+	if strings.HasPrefix(value, "https://") {
 		return
 	}
 
