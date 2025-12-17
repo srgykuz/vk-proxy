@@ -712,9 +712,8 @@ func (s *session) executeMethodQR(encoded []string, caption string) error {
 func (s *session) executeMethodStorage(encoded string) error {
 	club := randElem(s.cfg.Clubs)
 	p := storageSetParams{
-		key:    createStorageSetKey(),
-		value:  encoded,
-		userID: club.ID,
+		key:   createStorageSetKey(),
+		value: encoded,
 	}
 	err := storageSet(s.cfg.API, club, p)
 

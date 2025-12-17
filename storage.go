@@ -22,8 +22,7 @@ var storageNextKey = 0
 
 func listenStorage(cfg config, club configClub) error {
 	params := storageGetParams{
-		keys:   createStorageGetKeys(),
-		userID: club.ID,
+		keys: createStorageGetKeys(),
 	}
 	last, err := storageGet(cfg.API, club, params)
 

@@ -836,8 +836,7 @@ func photosUploadAndSave(cfg configAPI, club configClub, user configUser, params
 }
 
 type storageGetParams struct {
-	keys   []string
-	userID string
+	keys []string
 }
 
 type storageGetResult struct {
@@ -853,7 +852,7 @@ func storageGet(cfg configAPI, club configClub, params storageGetParams) ([]stor
 	values := apiValues(club.AccessToken)
 
 	values.Set("keys", strings.Join(params.keys, ","))
-	values.Set("user_id", params.userID)
+	values.Set("user_id", club.ID)
 
 	uri := apiURL("storage.get", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
@@ -878,9 +877,8 @@ func storageGet(cfg configAPI, club configClub, params storageGetParams) ([]stor
 }
 
 type storageSetParams struct {
-	key    string
-	value  string
-	userID string
+	key   string
+	value string
 }
 
 type storageSetResult struct {
@@ -892,7 +890,7 @@ func storageSet(cfg configAPI, club configClub, params storageSetParams) error {
 
 	values.Set("key", params.key)
 	values.Set("value", params.value)
-	values.Set("user_id", params.userID)
+	values.Set("user_id", club.ID)
 
 	uri := apiURL("storage.set", values)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
