@@ -95,14 +95,16 @@ func apiDo(cfg configAPI, club configClub, user configUser, req *http.Request) (
 	}
 
 	if strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
-		result := errorResult{}
+		results := []errorResult{errorResult1{}, errorResult2{}}
 
-		if err := json.Unmarshal(data, &result); err != nil {
-			return nil, fmt.Errorf("%v %v", err, descr)
-		}
+		for _, result := range results {
+			if err := json.Unmarshal(data, &result); err != nil {
+				continue
+			}
 
-		if err := result.Error.check(); err != nil {
-			return nil, fmt.Errorf("%v %v", err, descr)
+			if err := result.check(); err != nil {
+				return nil, fmt.Errorf("%v %v", err, descr)
+			}
 		}
 	}
 
@@ -137,24 +139,41 @@ func apiDownloadURL(cfg configAPI, uri string) ([]byte, error) {
 	return apiDownload(cfg, p)
 }
 
-type errorResult struct {
-	Error errorResponse `json:"error"`
+type errorResult interface {
+	check() error
 }
 
-type errorResponse struct {
+type errorResult1 struct {
+	Error errorResponse1 `json:"error"`
+}
+
+type errorResponse1 struct {
 	ErrorCode int    `json:"error_code"`
 	ErrorMsg  string `json:"error_msg"`
 }
 
-func (r errorResponse) check() error {
-	switch r.ErrorCode {
+func (r errorResult1) check() error {
+	switch r.Error.ErrorCode {
 	case 0:
 		return nil
 	case 9:
 		return errFloodControl
 	default:
-		return fmt.Errorf("code %d: %s", r.ErrorCode, r.ErrorMsg)
+		return fmt.Errorf("code %d: %s", r.Error.ErrorCode, r.Error.ErrorMsg)
 	}
+}
+
+type errorResult2 struct {
+	Error      string `json:"error"`
+	ErrorDescr string `json:"error_descr"`
+}
+
+func (r errorResult2) check() error {
+	if len(r.Error) > 0 {
+		return fmt.Errorf("%v: %v", r.Error, r.ErrorDescr)
+	}
+
+	return nil
 }
 
 type messagesSendParams struct {
@@ -532,8 +551,6 @@ type docsUploadParams struct {
 }
 
 type docsUploadResult struct {
-	Error      string `json:"error"`
-	ErrorDescr string `json:"error_descr"`
 	docsUploadResponse
 }
 
@@ -569,10 +586,6 @@ func docsUpload(cfg configAPI, params docsUploadParams) (docsUploadResponse, err
 
 	if err := json.Unmarshal(data, &result); err != nil {
 		return docsUploadResponse{}, err
-	}
-
-	if len(result.Error) > 0 {
-		return docsUploadResponse{}, fmt.Errorf("docs.upload: %v", result.Error)
 	}
 
 	return result.docsUploadResponse, nil
@@ -697,8 +710,6 @@ type photosUploadParams struct {
 }
 
 type photosUploadResult struct {
-	Error      string `json:"error"`
-	ErrorDescr string `json:"error_descr"`
 	photosUploadResponse
 }
 
@@ -736,10 +747,6 @@ func photosUpload(cfg configAPI, params photosUploadParams) (photosUploadRespons
 
 	if err := json.Unmarshal(data, &result); err != nil {
 		return photosUploadResponse{}, err
-	}
-
-	if len(result.Error) > 0 {
-		return photosUploadResponse{}, fmt.Errorf("photos.upload: %v", result.Error)
 	}
 
 	if result.PhotosList == "" || result.PhotosList == "[]" {
