@@ -1,0 +1,9 @@
+/var/log/vk-proxy/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 nobody nogroup
+}

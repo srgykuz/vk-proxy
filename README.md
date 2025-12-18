@@ -119,6 +119,7 @@ cd vk-proxy
 mkdir /var/log/vk-proxy
 touch /var/log/vk-proxy/output.log
 chown nobody:nogroup /var/log/vk-proxy/output.log
+mv logrotate.txt /etc/logrotate.d/vk-proxy
 
 mkdir /usr/local/etc/vk-proxy
 mv vk-proxy /usr/local/bin/
