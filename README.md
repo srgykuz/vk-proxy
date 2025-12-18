@@ -124,7 +124,7 @@ mv logrotate.txt /etc/logrotate.d/vk-proxy
 mkdir /usr/local/etc/vk-proxy
 mv vk-proxy /usr/local/bin/
 mv config.json /usr/local/etc/vk-proxy/
-mv vk-proxy.service /etc/systemd/system/
+mv systemd.txt /etc/systemd/system/vk-proxy.service
 
 systemctl daemon-reload
 systemctl enable vk-proxy

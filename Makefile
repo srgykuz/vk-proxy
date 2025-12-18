@@ -21,16 +21,14 @@ dist: bin
 	@mkdir -p $(DIST_DIR)/tmp
 
 	cp $(BIN_DIR)/$(NAME)-linux-amd64 $(DIST_DIR)/tmp/$(NAME)
-	cp README.md stub.jpg stub.mp4 logrotate.txt $(DIST_DIR)/tmp/
+	cp README.md stub.jpg stub.mp4 systemd.txt logrotate.txt $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	cp systemd.service $(DIST_DIR)/tmp/$(NAME).service
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json $(NAME).service logrotate.txt
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json systemd.txt logrotate.txt
 
 	cp $(BIN_DIR)/$(NAME)-linux-arm64 $(DIST_DIR)/tmp/$(NAME)
-	cp README.md stub.jpg stub.mp4 logrotate.txt $(DIST_DIR)/tmp/
+	cp README.md stub.jpg stub.mp4 systemd.txt logrotate.txt $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	cp systemd.service $(DIST_DIR)/tmp/$(NAME).service
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json $(NAME).service logrotate.txt
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-linux-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json systemd.txt logrotate.txt
 
 	cp $(BIN_DIR)/$(NAME)-darwin-amd64 $(DIST_DIR)/tmp/$(NAME)
 	cp README.md stub.jpg stub.mp4 $(DIST_DIR)/tmp/
