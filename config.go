@@ -70,6 +70,7 @@ type configClub struct {
 	AlbumID     string `json:"albumID"`
 	PhotoID     string `json:"photoID"`
 	VideoID     string `json:"videoID"`
+	MarketID    string `json:"marketID"`
 }
 
 type configUser struct {
@@ -169,6 +170,10 @@ func validateConfig(cfg config) error {
 		if club.VideoID == "" {
 			return errors.New("club.videoID is missing")
 		}
+
+		if club.MarketID == "" {
+			return errors.New("club.marketID is missing")
+		}
 	}
 
 	for _, user := range cfg.Users {
@@ -248,6 +253,7 @@ func validateLongPoll(cfg configAPI, club configClub) error {
 		"wall_post_new",
 		"wall_reply_new",
 		"group_change_settings",
+		"market_comment_new",
 	}
 
 	for _, event := range required {

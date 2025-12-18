@@ -35,17 +35,19 @@
 
 Нажмите Сообщение, напишите что-нибудь, нажмите Отправить, отключите уведомления. Вернитесь обратно на страницу сообщества, нажав два раза на название сообщества.
 
+Нажмите Управление, измените Тип сообщества на Частное, нажмите Сохранить.
+
+Нажмите Разделы, включите разделы Файлы и Товары, нажмите Сохранить.
+
+Нажмите Дополнительно, нажмите Работа с API, нажмите Создать ключ, включите все доступы, нажмите Создать, подтвердите действие. Ключ доступа имеет вид `vk1.a.abCdE...`. Скопируйте его полностью и сохраните. Никому не давайте этот ключ доступа.
+
+Нажмите Long Poll API, измените Отключено на Включено, нажмите Типы событий, включите: Исходящее сообщение, Фотографии Добавление, Фотографии Новый комментарий, Видеозаписи Новый комментарий, Записи на стене Добавление, Комментарии на стене Добавление, Товары Новый комментарий, Прочее Изменение настроек. Вернитесь обратно, нажав на название сообщества.
+
 Предварительно скачайте [stub.jpg](/stub.jpg). Нажмите Фото, нажмите Добавить фото, выберите [stub.jpg](/stub.jpg). Нажмите на загруженное фото. Адресная строка будет иметь вид `https://vk.com/album-12345_6789?z=photo-12345_9876`, где `6789` - это ID альбома, а `9876` - это ID фото. Сохраните оба ID. Вернитесь обратно, нажав на название сообщества.
 
 Предварительно скачайте [stub.mp4](/stub.mp4). Нажмите Видео, наведите на Добавить, нажмите Добавить видео, нажмите Выбрать файл, выберите [stub.mp4](/stub.mp4). Ссылка на видео, справа, будет иметь вид `https://vk.com/video-12345_7890`, где `7890` - ID видео. Сохраните этот ID. Нажмите Далее, нажмите Далее, нажмите Опубликовать. Закройте открывшуюся страницу ВК Видео и вернитесь обратно на страницу сообщества.
 
-Нажмите Управление, измените Тип сообщества на Частное, нажмите Сохранить.
-
-Нажмите Разделы, включите раздел Файлы, нажмите Сохранить.
-
-Нажмите Дополнительно, нажмите Работа с API, нажмите Создать ключ, включите все доступы, нажмите Создать, подтвердите действие. Ключ доступа имеет вид `vk1.a.abCdE...`. Скопируйте его полностью и сохраните. Никому не давайте этот ключ доступа.
-
-Нажмите Long Poll API, измените Отключено на Включено, нажмите Типы событий, включите: Исходящее сообщение, Фотографии Добавление, Фотографии Новый комментарий, Видеозаписи Новый комментарий, Записи на стене Добавление, Комментарии на стене Добавление, Прочее Изменение настроек.
+Где вы нажимали Фото и Видео, прокрутите вправо. Нажмите Товары, нажмите Добавить товары, введите любые: категория, название, описание. Нажмите Выберите изображение, выберите ранее загруженное фото, нажмите Выбрать фото, нажмите Сохранить изменения, нажмите Создать товар. Нажмите Товары, нажмите на созданный товар. Адресная строка будет иметь вид `https://vk.com/market/product/12345-8901`, где `8901` - ID товара. Сохраните этот ID.
 
 #### 3. Повторите
 
@@ -61,11 +63,11 @@
 
 Дайте доступ любому из этих сервисов:
 
-- [aliexpress](https://oauth.vk.com/authorize?client_id=7493445&scope=65556&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [instagram](https://oauth.vk.com/authorize?client_id=3698024&scope=65556&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [prisma](https://oauth.vk.com/authorize?client_id=5530956&scope=65556&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [kate mobile](https://oauth.vk.com/authorize?client_id=2685278&scope=65556&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [vfeed](https://oauth.vk.com/authorize?client_id=4083558&scope=65556&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [aliexpress](https://oauth.vk.com/authorize?client_id=7493445&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [instagram](https://oauth.vk.com/authorize?client_id=3698024&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [prisma](https://oauth.vk.com/authorize?client_id=5530956&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [kate mobile](https://oauth.vk.com/authorize?client_id=2685278&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [vfeed](https://oauth.vk.com/authorize?client_id=4083558&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
 
 Сам сервис не будет иметь доступа к аккаунту. Доступ будет иметь только тот, у кого будет ключ, а будет он только у вас. Если вы все равно не хотите давать доступ, то смотрите [Без доступа к аккаунту](#без-доступа-к-аккаунту).
 
@@ -181,7 +183,8 @@ nano /usr/local/etc/vk-proxy/config.json
             "accessToken": "vk1.a.abCdE",
             "albumID": "6789",
             "photoID": "9876",
-            "videoID": "7890"
+            "videoID": "7890",
+            "marketID": "8901"
         }
     ],
     "users": [
@@ -443,7 +446,8 @@ curl --verbose --socks4 127.0.0.1:1080 https://api.ipapi.is/
             "accessToken": "", // Ключ доступа к API
             "albumID": "", // ID альбома куда загружать QR-коды
             "photoID": "", // ID загруженного фото
-            "videoID": "" // ID загруженного видео
+            "videoID": "", // ID загруженного видео
+            "marketID": "" // ID созданного товара
         }
     ],
     "users": [ // Описания пользователей

@@ -24,6 +24,7 @@ const (
 	methodWebsite
 	methodVideoComment
 	methodPhotoComment
+	methodMarketComment
 )
 
 var (
@@ -38,52 +39,56 @@ var methodsMaxLenPayload = map[int]int{}
 
 func initSession(cfg config) error {
 	methodsEnabled = map[int]bool{
-		methodMessage:      true,
-		methodPost:         true,
-		methodWallComment:  true,
-		methodDoc:          true,
-		methodQR:           !cfg.QR.Disabled,
-		methodStorage:      true,
-		methodDescription:  true,
-		methodWebsite:      true,
-		methodVideoComment: !cfg.API.Unathorized,
-		methodPhotoComment: !cfg.API.Unathorized,
+		methodMessage:       true,
+		methodPost:          true,
+		methodWallComment:   true,
+		methodDoc:           true,
+		methodQR:            !cfg.QR.Disabled,
+		methodStorage:       true,
+		methodDescription:   true,
+		methodWebsite:       true,
+		methodVideoComment:  !cfg.API.Unathorized,
+		methodPhotoComment:  !cfg.API.Unathorized,
+		methodMarketComment: !cfg.API.Unathorized,
 	}
 	methodsEncoding = map[int]int{
-		methodMessage:      datagramEncodingRU,
-		methodPost:         datagramEncodingRU,
-		methodWallComment:  datagramEncodingRU,
-		methodDoc:          datagramEncodingASCII,
-		methodQR:           datagramEncodingASCII,
-		methodStorage:      datagramEncodingASCII,
-		methodDescription:  datagramEncodingASCII,
-		methodWebsite:      datagramEncodingASCII,
-		methodVideoComment: datagramEncodingRU,
-		methodPhotoComment: datagramEncodingRU,
+		methodMessage:       datagramEncodingRU,
+		methodPost:          datagramEncodingRU,
+		methodWallComment:   datagramEncodingRU,
+		methodDoc:           datagramEncodingASCII,
+		methodQR:            datagramEncodingASCII,
+		methodStorage:       datagramEncodingASCII,
+		methodDescription:   datagramEncodingASCII,
+		methodWebsite:       datagramEncodingASCII,
+		methodVideoComment:  datagramEncodingRU,
+		methodPhotoComment:  datagramEncodingRU,
+		methodMarketComment: datagramEncodingRU,
 	}
 	methodsMaxLenEncoded = map[int]int{
-		methodMessage:      4096,
-		methodPost:         16000,
-		methodWallComment:  16000,
-		methodDoc:          1 * 1024 * 1024,
-		methodQR:           qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
-		methodStorage:      4096,
-		methodDescription:  3000,
-		methodWebsite:      200,
-		methodVideoComment: 4096,
-		methodPhotoComment: 2048,
+		methodMessage:       4096,
+		methodPost:          16000,
+		methodWallComment:   16000,
+		methodDoc:           1 * 1024 * 1024,
+		methodQR:            qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
+		methodStorage:       4096,
+		methodDescription:   3000,
+		methodWebsite:       200,
+		methodVideoComment:  4096,
+		methodPhotoComment:  2048,
+		methodMarketComment: 2048,
 	}
 	methodsMaxLenPayload = map[int]int{
-		methodMessage:      datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
-		methodPost:         datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
-		methodWallComment:  datagramCalcMaxLen(methodsMaxLenEncoded[methodWallComment] - datagramHeaderLenEncoded),
-		methodDoc:          datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
-		methodQR:           datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
-		methodStorage:      datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
-		methodDescription:  datagramCalcMaxLen(methodsMaxLenEncoded[methodDescription] - datagramHeaderLenEncoded),
-		methodWebsite:      datagramCalcMaxLen(methodsMaxLenEncoded[methodWebsite] - datagramHeaderLenEncoded),
-		methodVideoComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodVideoComment] - datagramHeaderLenEncoded),
-		methodPhotoComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodPhotoComment] - datagramHeaderLenEncoded),
+		methodMessage:       datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
+		methodPost:          datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
+		methodWallComment:   datagramCalcMaxLen(methodsMaxLenEncoded[methodWallComment] - datagramHeaderLenEncoded),
+		methodDoc:           datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
+		methodQR:            datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
+		methodStorage:       datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
+		methodDescription:   datagramCalcMaxLen(methodsMaxLenEncoded[methodDescription] - datagramHeaderLenEncoded),
+		methodWebsite:       datagramCalcMaxLen(methodsMaxLenEncoded[methodWebsite] - datagramHeaderLenEncoded),
+		methodVideoComment:  datagramCalcMaxLen(methodsMaxLenEncoded[methodVideoComment] - datagramHeaderLenEncoded),
+		methodPhotoComment:  datagramCalcMaxLen(methodsMaxLenEncoded[methodPhotoComment] - datagramHeaderLenEncoded),
+		methodMarketComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodMarketComment] - datagramHeaderLenEncoded),
 	}
 
 	return nil
@@ -383,6 +388,10 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 		smallMethods = append(smallMethods, methodPhotoComment)
 	}
 
+	if enabled := methodsEnabled[methodMarketComment]; enabled {
+		smallMethods = append(smallMethods, methodMarketComment)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
@@ -500,6 +509,8 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodVideoComment
 		case methodPhotoComment:
 			f = s.executeMethodPhotoComment
+		case methodMarketComment:
+			f = s.executeMethodMarketComment
 		default:
 			return fmt.Errorf("unknown method: %v", method)
 		}
@@ -631,6 +642,10 @@ func (s *session) executeMethodDoc(encoded string) error {
 		methods = append(methods, methodPhotoComment)
 	}
 
+	if enabled := methodsEnabled[methodMarketComment]; enabled {
+		methods = append(methods, methodMarketComment)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
@@ -660,6 +675,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodVideoComment(msg)
 	case methodPhotoComment:
 		err = s.executeMethodPhotoComment(msg)
+	case methodMarketComment:
+		err = s.executeMethodMarketComment(msg)
 	default:
 		err = fmt.Errorf("unknown method: %v", method)
 	}
@@ -758,6 +775,17 @@ func (s *session) executeMethodPhotoComment(encoded string) error {
 		message: encoded,
 	}
 	err := photosCreateComment(s.cfg.API, club, user, p)
+
+	return err
+}
+
+func (s *session) executeMethodMarketComment(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	user := randElem(s.cfg.Users)
+	p := marketCreateCommentParams{
+		message: encoded,
+	}
+	err := marketCreateComment(s.cfg.API, club, user, p)
 
 	return err
 }

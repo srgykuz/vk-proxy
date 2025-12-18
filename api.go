@@ -289,6 +289,7 @@ const (
 	updateTypeGroupChangeSettings
 	updateTypeVideoCommentNew
 	updateTypePhotoCommentNew
+	updateTypeMarketCommentNew
 )
 
 type update struct {
@@ -317,6 +318,8 @@ func (u update) TypeEnum() int {
 		return updateTypeVideoCommentNew
 	case "photo_comment_new":
 		return updateTypePhotoCommentNew
+	case "market_comment_new":
+		return updateTypeMarketCommentNew
 	default:
 		return 0
 	}
@@ -1074,6 +1077,59 @@ func photosCreateComment(cfg configAPI, club configClub, user configUser, params
 
 	if result.Response == 0 {
 		return errors.New("photos.createComment: failed")
+	}
+
+	return nil
+}
+
+type marketCreateCommentParams struct {
+	message string
+}
+
+type marketCreateCommentResult struct {
+	Response int `json:"response"`
+}
+
+func marketCreateComment(cfg configAPI, club configClub, user configUser, params marketCreateCommentParams) error {
+	if cfg.Unathorized {
+		return errUnathorizedUser
+	}
+
+	form := map[string]string{
+		"owner_id": "-" + club.ID,
+		"item_id":  club.MarketID,
+		"message":  params.message,
+	}
+	body, ct, err := apiForm(form, nil)
+
+	if err != nil {
+		return err
+	}
+
+	values := apiValues(user.AccessToken)
+	uri := apiURL("market.createComment", values)
+	req, err := http.NewRequest(http.MethodPost, uri, body)
+
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", ct)
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return err
+	}
+
+	result := marketCreateCommentResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+
+	if result.Response == 0 {
+		return errors.New("market.createComment: failed")
 	}
 
 	return nil
