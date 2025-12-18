@@ -16,7 +16,7 @@ import (
 const (
 	methodMessage int = iota + 1
 	methodPost
-	methodComment
+	methodWallComment
 	methodDoc
 	methodQR
 	methodStorage
@@ -40,7 +40,7 @@ func initSession(cfg config) error {
 	methodsEnabled = map[int]bool{
 		methodMessage:      true,
 		methodPost:         true,
-		methodComment:      true,
+		methodWallComment:  true,
 		methodDoc:          true,
 		methodQR:           !cfg.QR.Disabled,
 		methodStorage:      true,
@@ -52,7 +52,7 @@ func initSession(cfg config) error {
 	methodsEncoding = map[int]int{
 		methodMessage:      datagramEncodingRU,
 		methodPost:         datagramEncodingRU,
-		methodComment:      datagramEncodingRU,
+		methodWallComment:  datagramEncodingRU,
 		methodDoc:          datagramEncodingASCII,
 		methodQR:           datagramEncodingASCII,
 		methodStorage:      datagramEncodingASCII,
@@ -64,7 +64,7 @@ func initSession(cfg config) error {
 	methodsMaxLenEncoded = map[int]int{
 		methodMessage:      4096,
 		methodPost:         16000,
-		methodComment:      16000,
+		methodWallComment:  16000,
 		methodDoc:          1 * 1024 * 1024,
 		methodQR:           qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
 		methodStorage:      4096,
@@ -76,7 +76,7 @@ func initSession(cfg config) error {
 	methodsMaxLenPayload = map[int]int{
 		methodMessage:      datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
 		methodPost:         datagramCalcMaxLen(methodsMaxLenEncoded[methodPost] - datagramHeaderLenEncoded),
-		methodComment:      datagramCalcMaxLen(methodsMaxLenEncoded[methodComment] - datagramHeaderLenEncoded),
+		methodWallComment:  datagramCalcMaxLen(methodsMaxLenEncoded[methodWallComment] - datagramHeaderLenEncoded),
 		methodDoc:          datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
 		methodQR:           datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
 		methodStorage:      datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
@@ -386,7 +386,7 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
-		smallMethods = append(smallMethods, methodComment, methodComment)
+		smallMethods = append(smallMethods, methodWallComment, methodWallComment)
 	}
 
 	s.mu.Unlock()
@@ -486,8 +486,8 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodMessage
 		case methodPost:
 			f = s.executeMethodPost
-		case methodComment:
-			f = s.executeMethodComment
+		case methodWallComment:
+			f = s.executeMethodWallComment
 		case methodDoc:
 			f = s.executeMethodDoc
 		case methodStorage:
@@ -567,7 +567,7 @@ func (s *session) executeMethodPost(encoded string) error {
 	return nil
 }
 
-func (s *session) executeMethodComment(encoded string) error {
+func (s *session) executeMethodWallComment(encoded string) error {
 	s.mu.Lock()
 
 	if len(s.posts) == 0 {
@@ -634,7 +634,7 @@ func (s *session) executeMethodDoc(encoded string) error {
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
-		methods = append(methods, methodComment, methodComment)
+		methods = append(methods, methodWallComment, methodWallComment)
 	}
 
 	s.mu.Unlock()
@@ -646,8 +646,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodMessage(msg)
 	case methodPost:
 		err = s.executeMethodPost(msg)
-	case methodComment:
-		err = s.executeMethodComment(msg)
+	case methodWallComment:
+		err = s.executeMethodWallComment(msg)
 	case methodQR:
 		err = s.executeMethodQR([]string{zero}, msg)
 	case methodStorage:
