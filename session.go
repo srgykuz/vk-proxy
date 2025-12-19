@@ -43,7 +43,7 @@ func initSession(cfg config) error {
 		methodPost:          true,
 		methodWallComment:   true,
 		methodDoc:           true,
-		methodQR:            !cfg.QR.Disabled,
+		methodQR:            !(cfg.API.Unathorized || len(cfg.QR.ZBarPath) == 0),
 		methodStorage:       true,
 		methodDescription:   true,
 		methodWebsite:       true,
