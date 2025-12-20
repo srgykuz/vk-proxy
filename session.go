@@ -19,6 +19,7 @@ const (
 	methodWallComment
 	methodDoc
 	methodQR
+	methodCaption
 	methodStorage
 	methodDescription
 	methodWebsite
@@ -44,6 +45,7 @@ func initSession(cfg config) error {
 		methodWallComment:   true,
 		methodDoc:           true,
 		methodQR:            !(cfg.API.Unathorized || len(cfg.QR.ZBarPath) == 0),
+		methodCaption:       !cfg.API.Unathorized,
 		methodStorage:       true,
 		methodDescription:   true,
 		methodWebsite:       true,
@@ -57,6 +59,7 @@ func initSession(cfg config) error {
 		methodWallComment:   datagramEncodingRU,
 		methodDoc:           datagramEncodingASCII,
 		methodQR:            datagramEncodingASCII,
+		methodCaption:       datagramEncodingRU,
 		methodStorage:       datagramEncodingASCII,
 		methodDescription:   datagramEncodingASCII,
 		methodWebsite:       datagramEncodingASCII,
@@ -70,6 +73,7 @@ func initSession(cfg config) error {
 		methodWallComment:   16000,
 		methodDoc:           1 * 1024 * 1024,
 		methodQR:            qrMaxLen[qrLevel(cfg.QR.ImageLevel)],
+		methodCaption:       2048,
 		methodStorage:       4096,
 		methodDescription:   3000,
 		methodWebsite:       200,
@@ -83,6 +87,7 @@ func initSession(cfg config) error {
 		methodWallComment:   datagramCalcMaxLen(methodsMaxLenEncoded[methodWallComment] - datagramHeaderLenEncoded),
 		methodDoc:           datagramCalcMaxLen(methodsMaxLenEncoded[methodDoc] - datagramHeaderLenEncoded),
 		methodQR:            datagramCalcMaxLen(methodsMaxLenEncoded[methodQR] - datagramHeaderLenEncoded),
+		methodCaption:       datagramCalcMaxLen(methodsMaxLenEncoded[methodCaption] - datagramHeaderLenEncoded),
 		methodStorage:       datagramCalcMaxLen(methodsMaxLenEncoded[methodStorage] - datagramHeaderLenEncoded),
 		methodDescription:   datagramCalcMaxLen(methodsMaxLenEncoded[methodDescription] - datagramHeaderLenEncoded),
 		methodWebsite:       datagramCalcMaxLen(methodsMaxLenEncoded[methodWebsite] - datagramHeaderLenEncoded),
@@ -378,6 +383,8 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 
 	if enabled := methodsEnabled[methodQR]; enabled {
 		smallMethods = append(smallMethods, methodQR)
+	} else if enabled := methodsEnabled[methodCaption]; enabled {
+		smallMethods = append(smallMethods, methodCaption)
 	}
 
 	if enabled := methodsEnabled[methodVideoComment]; enabled {
@@ -499,6 +506,8 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodWallComment
 		case methodDoc:
 			f = s.executeMethodDoc
+		case methodCaption:
+			f = s.executeMethodCaption
 		case methodStorage:
 			f = s.executeMethodStorage
 		case methodDescription:
@@ -630,8 +639,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 	msg := strings.ReplaceAll(uri, ".", ". ")
 	methods := []int{methodMessage, methodPost, methodStorage, methodStorage /*, methodDescription, methodWebsite*/}
 
-	if enabled := methodsEnabled[methodQR]; enabled {
-		methods = append(methods, methodQR)
+	if enabled := methodsEnabled[methodCaption]; enabled {
+		methods = append(methods, methodCaption)
 	}
 
 	if enabled := methodsEnabled[methodVideoComment]; enabled {
@@ -663,8 +672,8 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodPost(msg)
 	case methodWallComment:
 		err = s.executeMethodWallComment(msg)
-	case methodQR:
-		err = s.executeMethodQR([]string{zero}, msg)
+	case methodCaption:
+		err = s.executeMethodCaption(msg)
 	case methodStorage:
 		err = s.executeMethodStorage(msg)
 	case methodDescription:
@@ -724,6 +733,12 @@ func (s *session) executeMethodQR(encoded []string, caption string) error {
 	}
 
 	return nil
+}
+
+func (s *session) executeMethodCaption(encoded string) error {
+	zero := encodeDatagram(newDatagram(0, 0, 0, nil), datagramEncodingASCII)
+
+	return s.executeMethodQR([]string{zero}, encoded)
 }
 
 func (s *session) executeMethodStorage(encoded string) error {

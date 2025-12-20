@@ -80,6 +80,8 @@ func handleUpdate(cfg config, club configClub, upd update) error {
 			encodedS = upd.Object.Text
 		} else if shouldHandlePhoto(upd.Object.Text) {
 			datagrams, err = handlePhoto(cfg.API, cfg.QR, upd.Object.OrigPhoto.URL)
+		} else {
+			encodedS = upd.Object.Text
 		}
 	case updateTypeStorageChange:
 		encodedS = upd.Object.Text
@@ -154,7 +156,9 @@ func shouldHandlePhoto(caption string) bool {
 		return true
 	}
 
-	return !dg.isZero()
+	isMethodQR := !dg.isZero() && dg.command == 0
+
+	return isMethodQR
 }
 
 func shouldHandleDoc(uri string) bool {
