@@ -290,6 +290,7 @@ const (
 	updateTypeVideoCommentNew
 	updateTypePhotoCommentNew
 	updateTypeMarketCommentNew
+	updateTypeBoardPostNew
 )
 
 type update struct {
@@ -320,6 +321,8 @@ func (u update) TypeEnum() int {
 		return updateTypePhotoCommentNew
 	case "market_comment_new":
 		return updateTypeMarketCommentNew
+	case "board_post_new":
+		return updateTypeBoardPostNew
 	default:
 		return 0
 	}
@@ -1130,6 +1133,114 @@ func marketCreateComment(cfg configAPI, club configClub, user configUser, params
 
 	if result.Response == 0 {
 		return errors.New("market.createComment: failed")
+	}
+
+	return nil
+}
+
+type boardAddTopicParams struct {
+	title string
+	text  string
+}
+
+type boardAddTopicResult struct {
+	Response int `json:"response"`
+}
+
+func boardAddTopic(cfg configAPI, club configClub, user configUser, params boardAddTopicParams) (int, error) {
+	if cfg.Unathorized {
+		return 0, errUnathorizedUser
+	}
+
+	form := map[string]string{
+		"group_id": club.ID,
+		"title":    params.title,
+		"text":     params.text,
+	}
+	body, ct, err := apiForm(form, nil)
+
+	if err != nil {
+		return 0, err
+	}
+
+	values := apiValues(user.AccessToken)
+	uri := apiURL("board.addTopic", values)
+	req, err := http.NewRequest(http.MethodPost, uri, body)
+
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Set("Content-Type", ct)
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return 0, err
+	}
+
+	result := boardAddTopicResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return 0, err
+	}
+
+	if result.Response == 0 {
+		return 0, errors.New("board.addTopic: failed")
+	}
+
+	return result.Response, nil
+}
+
+type boardCreateCommentParams struct {
+	topicID int
+	message string
+}
+
+type boardCreateCommentResult struct {
+	Response int `json:"response"`
+}
+
+func boardCreateComment(cfg configAPI, club configClub, user configUser, params boardCreateCommentParams) error {
+	if cfg.Unathorized {
+		return errUnathorizedUser
+	}
+
+	form := map[string]string{
+		"group_id": club.ID,
+		"topic_id": fmt.Sprint(params.topicID),
+		"message":  params.message,
+	}
+	body, ct, err := apiForm(form, nil)
+
+	if err != nil {
+		return err
+	}
+
+	values := apiValues(user.AccessToken)
+	uri := apiURL("board.createComment", values)
+	req, err := http.NewRequest(http.MethodPost, uri, body)
+
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", ct)
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return err
+	}
+
+	result := boardCreateCommentResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+
+	if result.Response == 0 {
+		return errors.New("board.createComment: failed")
 	}
 
 	return nil

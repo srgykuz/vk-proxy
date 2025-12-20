@@ -99,6 +99,8 @@ func handleUpdate(cfg config, club configClub, upd update) error {
 		encodedS = upd.Object.Text
 	case updateTypeMarketCommentNew:
 		encodedS = upd.Object.Text
+	case updateTypeBoardPostNew:
+		encodedS = upd.Object.Text
 	default:
 		err = errors.New("unsupported update")
 	}

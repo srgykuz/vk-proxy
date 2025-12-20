@@ -26,6 +26,8 @@ const (
 	methodVideoComment
 	methodPhotoComment
 	methodMarketComment
+	methodTopic
+	methodTopicComment
 )
 
 var (
@@ -52,6 +54,8 @@ func initSession(cfg config) error {
 		methodVideoComment:  !cfg.API.Unathorized,
 		methodPhotoComment:  !cfg.API.Unathorized,
 		methodMarketComment: !cfg.API.Unathorized,
+		methodTopic:         !cfg.API.Unathorized,
+		methodTopicComment:  !cfg.API.Unathorized,
 	}
 	methodsEncoding = map[int]int{
 		methodMessage:       datagramEncodingRU,
@@ -66,6 +70,8 @@ func initSession(cfg config) error {
 		methodVideoComment:  datagramEncodingRU,
 		methodPhotoComment:  datagramEncodingRU,
 		methodMarketComment: datagramEncodingRU,
+		methodTopic:         datagramEncodingRU,
+		methodTopicComment:  datagramEncodingRU,
 	}
 	methodsMaxLenEncoded = map[int]int{
 		methodMessage:       4096,
@@ -80,6 +86,8 @@ func initSession(cfg config) error {
 		methodVideoComment:  4096,
 		methodPhotoComment:  2048,
 		methodMarketComment: 2048,
+		methodTopic:         4096,
+		methodTopicComment:  4096,
 	}
 	methodsMaxLenPayload = map[int]int{
 		methodMessage:       datagramCalcMaxLen(methodsMaxLenEncoded[methodMessage] - datagramHeaderLenEncoded),
@@ -94,6 +102,8 @@ func initSession(cfg config) error {
 		methodVideoComment:  datagramCalcMaxLen(methodsMaxLenEncoded[methodVideoComment] - datagramHeaderLenEncoded),
 		methodPhotoComment:  datagramCalcMaxLen(methodsMaxLenEncoded[methodPhotoComment] - datagramHeaderLenEncoded),
 		methodMarketComment: datagramCalcMaxLen(methodsMaxLenEncoded[methodMarketComment] - datagramHeaderLenEncoded),
+		methodTopic:         datagramCalcMaxLen(methodsMaxLenEncoded[methodTopic] - datagramHeaderLenEncoded),
+		methodTopicComment:  datagramCalcMaxLen(methodsMaxLenEncoded[methodTopicComment] - datagramHeaderLenEncoded),
 	}
 
 	return nil
@@ -158,6 +168,7 @@ type session struct {
 	openedAt  time.Time
 	activity  time.Time
 	posts     map[configClub]wallPostResponse
+	topics    map[configClub]int
 	inBytes   int
 	outBytes  int
 }
@@ -181,6 +192,7 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		openedAt:  now,
 		activity:  now,
 		posts:     make(map[configClub]wallPostResponse),
+		topics:    make(map[configClub]int),
 		inBytes:   0,
 		outBytes:  0,
 	}
@@ -399,10 +411,18 @@ func (s *session) createPlan(dg datagram) ([]int, []datagram, error) {
 		smallMethods = append(smallMethods, methodMarketComment)
 	}
 
+	if enabled := methodsEnabled[methodTopic]; enabled {
+		smallMethods = append(smallMethods, methodTopic)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
 		smallMethods = append(smallMethods, methodPostComment, methodPostComment)
+	}
+
+	if len(s.topics) > 0 {
+		smallMethods = append(smallMethods, methodTopicComment)
 	}
 
 	s.mu.Unlock()
@@ -520,6 +540,10 @@ func (s *session) executePlan(methods []int, fragments []datagram) error {
 			f = s.executeMethodPhotoComment
 		case methodMarketComment:
 			f = s.executeMethodMarketComment
+		case methodTopic:
+			f = s.executeMethodTopic
+		case methodTopicComment:
+			f = s.executeMethodTopicComment
 		default:
 			return fmt.Errorf("unknown method: %v", method)
 		}
@@ -655,10 +679,18 @@ func (s *session) executeMethodDoc(encoded string) error {
 		methods = append(methods, methodMarketComment)
 	}
 
+	if enabled := methodsEnabled[methodTopic]; enabled {
+		methods = append(methods, methodTopic)
+	}
+
 	s.mu.Lock()
 
 	if len(s.posts) > 0 {
 		methods = append(methods, methodPostComment, methodPostComment)
+	}
+
+	if len(s.topics) > 0 {
+		methods = append(methods, methodTopicComment)
 	}
 
 	s.mu.Unlock()
@@ -686,6 +718,10 @@ func (s *session) executeMethodDoc(encoded string) error {
 		err = s.executeMethodPhotoComment(msg)
 	case methodMarketComment:
 		err = s.executeMethodMarketComment(msg)
+	case methodTopic:
+		err = s.executeMethodTopic(msg)
+	case methodTopicComment:
+		err = s.executeMethodTopicComment(msg)
 	default:
 		err = fmt.Errorf("unknown method: %v", method)
 	}
@@ -801,6 +837,56 @@ func (s *session) executeMethodMarketComment(encoded string) error {
 		message: encoded,
 	}
 	err := marketCreateComment(s.cfg.API, club, user, p)
+
+	return err
+}
+
+func (s *session) executeMethodTopic(encoded string) error {
+	club := randElem(s.cfg.Clubs)
+	user := randElem(s.cfg.Users)
+	zero := encodeDatagram(newDatagram(0, 0, 0, nil), datagramEncodingRU)
+	p := boardAddTopicParams{
+		title: zero,
+		text:  encoded,
+	}
+	id, err := boardAddTopic(s.cfg.API, club, user, p)
+
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.topics[club] = id
+	s.mu.Unlock()
+
+	return nil
+}
+
+func (s *session) executeMethodTopicComment(encoded string) error {
+	s.mu.Lock()
+
+	if len(s.topics) == 0 {
+		s.mu.Unlock()
+		return errors.New("no topics created")
+	}
+
+	clubs := []configClub{}
+
+	for key := range s.topics {
+		clubs = append(clubs, key)
+	}
+
+	club := randElem(clubs)
+	id := s.topics[club]
+
+	s.mu.Unlock()
+
+	user := randElem(s.cfg.Users)
+	p := boardCreateCommentParams{
+		topicID: id,
+		message: encoded,
+	}
+	err := boardCreateComment(s.cfg.API, club, user, p)
 
 	return err
 }

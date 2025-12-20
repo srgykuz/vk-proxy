@@ -41,7 +41,7 @@
 
 Нажмите Дополнительно, нажмите Работа с API, нажмите Создать ключ, включите все доступы, нажмите Создать, подтвердите действие. Ключ доступа имеет вид `vk1.a.abCdE...`. Скопируйте его полностью и сохраните. Никому не давайте этот ключ доступа.
 
-Нажмите Long Poll API, измените Отключено на Включено, нажмите Типы событий, включите: Исходящее сообщение, Фотографии Добавление, Фотографии Новый комментарий, Видеозаписи Новый комментарий, Записи на стене Добавление, Комментарии на стене Добавление, Товары Новый комментарий, Прочее Изменение настроек. Вернитесь обратно, нажав на название сообщества.
+Нажмите Long Poll API, измените Отключено на Включено, нажмите Типы событий, включите: Исходящее сообщение, Фотографии Добавление, Фотографии Новый комментарий, Видеозаписи Новый комментарий, Записи на стене Добавление, Комментарии на стене Добавление, Обсуждения Добавление, Товары Новый комментарий, Прочее Изменение настроек. Вернитесь обратно, нажав на название сообщества.
 
 Предварительно скачайте [stub.jpg](/stub.jpg). Нажмите Фото, нажмите Добавить фото, выберите [stub.jpg](/stub.jpg). Нажмите на загруженное фото. Адресная строка будет иметь вид `https://vk.com/album-12345_6789?z=photo-12345_9876`, где `6789` - это ID альбома, а `9876` - это ID фото. Сохраните оба ID. Вернитесь обратно, нажав на название сообщества.
 
@@ -63,11 +63,11 @@
 
 Дайте доступ любому из этих сервисов:
 
-- [aliexpress](https://oauth.vk.com/authorize?client_id=7493445&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [instagram](https://oauth.vk.com/authorize?client_id=3698024&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [prisma](https://oauth.vk.com/authorize?client_id=5530956&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [kate mobile](https://oauth.vk.com/authorize?client_id=2685278&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
-- [vfeed](https://oauth.vk.com/authorize?client_id=4083558&scope=134283284&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [aliexpress](https://oauth.vk.com/authorize?client_id=7493445&scope=134545428&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [instagram](https://oauth.vk.com/authorize?client_id=3698024&scope=134545428&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [prisma](https://oauth.vk.com/authorize?client_id=5530956&scope=134545428&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [kate mobile](https://oauth.vk.com/authorize?client_id=2685278&scope=134545428&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
+- [vfeed](https://oauth.vk.com/authorize?client_id=4083558&scope=134545428&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token&revoke=1)
 
 Сам сервис не будет иметь доступа к аккаунту. Доступ будет иметь только тот, у кого будет ключ, а будет он только у вас. Если вы все равно не хотите давать доступ, то смотрите [Без доступа к аккаунту](#без-доступа-к-аккаунту).
 

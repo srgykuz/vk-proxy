@@ -250,6 +250,7 @@ func validateLongPoll(cfg configAPI, club configClub) error {
 		"wall_reply_new",
 		"group_change_settings",
 		"market_comment_new",
+		"board_post_new",
 	}
 
 	for _, event := range required {
