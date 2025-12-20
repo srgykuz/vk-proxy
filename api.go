@@ -1261,3 +1261,71 @@ func boardCreateComment(cfg configAPI, club configClub, user configUser, params 
 
 	return nil
 }
+
+type groupsGetTokenPermissionsResult struct {
+	Response groupsGetTokenPermissionsResponse `json:"response"`
+}
+
+type groupsGetTokenPermissionsResponse struct {
+	Mask int `json:"mask"`
+}
+
+func groupsGetTokenPermissions(cfg configAPI, club configClub) (groupsGetTokenPermissionsResponse, error) {
+	values := apiValues(club.AccessToken)
+	uri := apiURL("groups.getTokenPermissions", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return groupsGetTokenPermissionsResponse{}, err
+	}
+
+	data, err := apiDo(cfg, club, configUser{}, req)
+
+	if err != nil {
+		return groupsGetTokenPermissionsResponse{}, err
+	}
+
+	result := groupsGetTokenPermissionsResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return groupsGetTokenPermissionsResponse{}, err
+	}
+
+	return result.Response, nil
+}
+
+type accountGetAppPermissionsResult struct {
+	Response int `json:"response"`
+}
+
+type accountGetAppPermissionsResponse struct {
+	Mask int
+}
+
+func accountGetAppPermissions(cfg configAPI, user configUser) (accountGetAppPermissionsResponse, error) {
+	values := apiValues(user.AccessToken)
+	uri := apiURL("account.getAppPermissions", values)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+
+	if err != nil {
+		return accountGetAppPermissionsResponse{}, err
+	}
+
+	data, err := apiDo(cfg, configClub{}, user, req)
+
+	if err != nil {
+		return accountGetAppPermissionsResponse{}, err
+	}
+
+	result := accountGetAppPermissionsResult{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return accountGetAppPermissionsResponse{}, err
+	}
+
+	resp := accountGetAppPermissionsResponse{
+		Mask: result.Response,
+	}
+
+	return resp, nil
+}

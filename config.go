@@ -230,6 +230,42 @@ func validateQR(cfg configQR) error {
 	return nil
 }
 
+func validateClub(cfg configAPI, club configClub) error {
+	perm, err := groupsGetTokenPermissions(cfg, club)
+
+	if err != nil {
+		return err
+	}
+
+	bits := []int{0, 2, 12, 13, 17, 18, 27}
+
+	for _, bit := range bits {
+		if perm.Mask&(1<<bit) == 0 {
+			return fmt.Errorf("permission %v is disabled", bit)
+		}
+	}
+
+	return nil
+}
+
+func validateUser(cfg configAPI, user configUser) error {
+	perm, err := accountGetAppPermissions(cfg, user)
+
+	if err != nil {
+		return err
+	}
+
+	bits := []int{2, 4, 16, 18, 27}
+
+	for _, bit := range bits {
+		if perm.Mask&(1<<bit) == 0 {
+			return fmt.Errorf("permission %v is disabled", bit)
+		}
+	}
+
+	return nil
+}
+
 func validateLongPoll(cfg configAPI, club configClub) error {
 	settings, err := groupsGetLongPollSettings(cfg, club)
 

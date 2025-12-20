@@ -53,8 +53,20 @@ func main() {
 	}
 
 	for _, club := range cfg.Clubs {
+		if err := validateClub(cfg.API, club); err != nil {
+			fmt.Fprintln(os.Stderr, "validate club:", club.Name+":", err)
+			os.Exit(1)
+		}
+
 		if err := validateLongPoll(cfg.API, club); err != nil {
 			fmt.Fprintln(os.Stderr, "validate long poll:", club.Name+":", err)
+			os.Exit(1)
+		}
+	}
+
+	for _, user := range cfg.Users {
+		if err := validateUser(cfg.API, user); err != nil {
+			fmt.Fprintln(os.Stderr, "validate user:", user.Name+":", err)
 			os.Exit(1)
 		}
 	}
