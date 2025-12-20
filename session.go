@@ -168,7 +168,7 @@ type session struct {
 	openedAt  time.Time
 	activity  time.Time
 	posts     map[configClub]wallPostResponse
-	topics    map[configClub]int
+	topics    map[configClub]boardAddTopicResponse
 	inBytes   int
 	outBytes  int
 }
@@ -192,7 +192,7 @@ func openSession(id dgSes, cfg config) (*session, error) {
 		openedAt:  now,
 		activity:  now,
 		posts:     make(map[configClub]wallPostResponse),
-		topics:    make(map[configClub]int),
+		topics:    make(map[configClub]boardAddTopicResponse),
 		inBytes:   0,
 		outBytes:  0,
 	}
@@ -849,14 +849,14 @@ func (s *session) executeMethodTopic(encoded string) error {
 		title: zero,
 		text:  encoded,
 	}
-	id, err := boardAddTopic(s.cfg.API, club, user, p)
+	resp, err := boardAddTopic(s.cfg.API, club, user, p)
 
 	if err != nil {
 		return err
 	}
 
 	s.mu.Lock()
-	s.topics[club] = id
+	s.topics[club] = resp
 	s.mu.Unlock()
 
 	return nil
@@ -877,13 +877,13 @@ func (s *session) executeMethodTopicComment(encoded string) error {
 	}
 
 	club := randElem(clubs)
-	id := s.topics[club]
+	topic := s.topics[club]
 
 	s.mu.Unlock()
 
 	user := randElem(s.cfg.Users)
 	p := boardCreateCommentParams{
-		topicID: id,
+		topicID: topic.ID,
 		message: encoded,
 	}
 	err := boardCreateComment(s.cfg.API, club, user, p)

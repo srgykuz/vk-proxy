@@ -184,7 +184,11 @@ type messagesSendResult struct {
 	Response int `json:"response"`
 }
 
-func messagesSend(cfg configAPI, club configClub, user configUser, params messagesSendParams) (int, error) {
+type messagesSendResponse struct {
+	ID int
+}
+
+func messagesSend(cfg configAPI, club configClub, user configUser, params messagesSendParams) (messagesSendResponse, error) {
 	form := map[string]string{
 		"user_id":   user.ID,
 		"random_id": "0",
@@ -193,7 +197,7 @@ func messagesSend(cfg configAPI, club configClub, user configUser, params messag
 	body, ct, err := apiForm(form, nil)
 
 	if err != nil {
-		return 0, err
+		return messagesSendResponse{}, err
 	}
 
 	values := apiValues(club.AccessToken)
@@ -201,7 +205,7 @@ func messagesSend(cfg configAPI, club configClub, user configUser, params messag
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
 	if err != nil {
-		return 0, err
+		return messagesSendResponse{}, err
 	}
 
 	req.Header.Set("Content-Type", ct)
@@ -209,16 +213,20 @@ func messagesSend(cfg configAPI, club configClub, user configUser, params messag
 	data, err := apiDo(cfg, club, user, req)
 
 	if err != nil {
-		return 0, err
+		return messagesSendResponse{}, err
 	}
 
 	result := messagesSendResult{}
 
 	if err := json.Unmarshal(data, &result); err != nil {
-		return 0, err
+		return messagesSendResponse{}, err
 	}
 
-	return result.Response, nil
+	resp := messagesSendResponse{
+		ID: result.Response,
+	}
+
+	return resp, nil
 }
 
 type groupsGetLongPollServerResult struct {
@@ -1147,9 +1155,13 @@ type boardAddTopicResult struct {
 	Response int `json:"response"`
 }
 
-func boardAddTopic(cfg configAPI, club configClub, user configUser, params boardAddTopicParams) (int, error) {
+type boardAddTopicResponse struct {
+	ID int
+}
+
+func boardAddTopic(cfg configAPI, club configClub, user configUser, params boardAddTopicParams) (boardAddTopicResponse, error) {
 	if cfg.Unathorized {
-		return 0, errUnathorizedUser
+		return boardAddTopicResponse{}, errUnathorizedUser
 	}
 
 	form := map[string]string{
@@ -1160,7 +1172,7 @@ func boardAddTopic(cfg configAPI, club configClub, user configUser, params board
 	body, ct, err := apiForm(form, nil)
 
 	if err != nil {
-		return 0, err
+		return boardAddTopicResponse{}, err
 	}
 
 	values := apiValues(user.AccessToken)
@@ -1168,7 +1180,7 @@ func boardAddTopic(cfg configAPI, club configClub, user configUser, params board
 	req, err := http.NewRequest(http.MethodPost, uri, body)
 
 	if err != nil {
-		return 0, err
+		return boardAddTopicResponse{}, err
 	}
 
 	req.Header.Set("Content-Type", ct)
@@ -1176,20 +1188,24 @@ func boardAddTopic(cfg configAPI, club configClub, user configUser, params board
 	data, err := apiDo(cfg, club, configUser{}, req)
 
 	if err != nil {
-		return 0, err
+		return boardAddTopicResponse{}, err
 	}
 
 	result := boardAddTopicResult{}
 
 	if err := json.Unmarshal(data, &result); err != nil {
-		return 0, err
+		return boardAddTopicResponse{}, err
 	}
 
 	if result.Response == 0 {
-		return 0, errors.New("board.addTopic: failed")
+		return boardAddTopicResponse{}, errors.New("board.addTopic: failed")
 	}
 
-	return result.Response, nil
+	resp := boardAddTopicResponse{
+		ID: result.Response,
+	}
+
+	return resp, nil
 }
 
 type boardCreateCommentParams struct {
