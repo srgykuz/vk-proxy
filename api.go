@@ -95,16 +95,24 @@ func apiDo(cfg configAPI, club configClub, user configUser, req *http.Request) (
 	}
 
 	if strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
-		results := []errorResult{errorResult1{}, errorResult2{}}
+		var res1 errorResult1
+		var res2 errorResult2
+		var checkErr error
 
-		for _, result := range results {
-			if err := json.Unmarshal(data, &result); err != nil {
-				continue
+		if err := json.Unmarshal(data, &res1); err == nil {
+			if err := res1.check(); err != nil {
+				checkErr = err
 			}
+		}
 
-			if err := result.check(); err != nil {
-				return nil, fmt.Errorf("%v %v", err, descr)
+		if err := json.Unmarshal(data, &res2); err == nil {
+			if err := res2.check(); err != nil {
+				checkErr = err
 			}
+		}
+
+		if checkErr != nil {
+			return nil, fmt.Errorf("%v %v", checkErr, descr)
 		}
 	}
 
@@ -137,10 +145,6 @@ func apiDownloadURL(cfg configAPI, uri string) ([]byte, error) {
 	}
 
 	return apiDownload(cfg, p)
-}
-
-type errorResult interface {
-	check() error
 }
 
 type errorResult1 struct {
