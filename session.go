@@ -49,8 +49,8 @@ func initSession(cfg config) error {
 		methodQR:            !(cfg.API.Unathorized || len(cfg.QR.ZBarPath) == 0),
 		methodCaption:       !cfg.API.Unathorized,
 		methodStorage:       true,
-		methodDescription:   true,
-		methodWebsite:       true,
+		methodDescription:   false, // disabled, too early flood control
+		methodWebsite:       false, // disabled, too early flood control
 		methodVideoComment:  !cfg.API.Unathorized,
 		methodPhotoComment:  !cfg.API.Unathorized,
 		methodMarketComment: !cfg.API.Unathorized,
@@ -661,7 +661,15 @@ func (s *session) executeMethodDoc(encoded string) error {
 	}
 
 	msg := strings.ReplaceAll(uri, ".", ". ")
-	methods := []int{methodMessage, methodPost, methodStorage, methodStorage /*, methodDescription, methodWebsite*/}
+	methods := []int{methodMessage, methodPost, methodStorage, methodStorage}
+
+	if enabled := methodsEnabled[methodDescription]; enabled {
+		methods = append(methods, methodDescription)
+	}
+
+	if enabled := methodsEnabled[methodWebsite]; enabled {
+		methods = append(methods, methodWebsite)
+	}
 
 	if enabled := methodsEnabled[methodCaption]; enabled {
 		methods = append(methods, methodCaption)
