@@ -54,8 +54,8 @@ func initSession(cfg config) error {
 		methodVideoComment:  !cfg.API.Unathorized,
 		methodPhotoComment:  !cfg.API.Unathorized,
 		methodMarketComment: !cfg.API.Unathorized,
-		methodTopic:         !cfg.API.Unathorized,
-		methodTopicComment:  !cfg.API.Unathorized,
+		methodTopic:         false && !cfg.API.Unathorized, // disabled, captcha control
+		methodTopicComment:  false && !cfg.API.Unathorized, // disabled, captcha control
 	}
 	methodsEncoding = map[int]int{
 		methodMessage:       datagramEncodingRU,
