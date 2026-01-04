@@ -507,15 +507,107 @@ vk-proxy может начать работать нестабильно или 
 
 Рекомендуется использовать vk-proxy в связке с любым V2Ray-клиентом. В этом случае вы сможете настроить точечный роутинг и обеспечить более широкую поддержку входящих интерфейсов.
 
-Примеры V2Ray-клиентов:
+Примеры клиентов:
 
 - [v2rayN](https://github.com/2dust/v2rayN) (Linux, Windows, macOS)
 - [v2rayNG](https://github.com/2dust/v2rayNG) (Android)
 
+Примеры конфигов:
+
 <details>
 
 <summary>
-Пример конфига V2Ray
+v2rayN
+</summary>
+
+Профиль:
+
+```text
+socks://Og%3D%3D@127.0.0.1:1080#vk-proxy
+```
+
+Скопируйте его, откройте клиент, нажмите Серверы, нажмите Импорт массива URL из буфера обмена.
+
+Роутинг:
+
+```json
+[
+    {
+        "domain": [
+            "google.com",
+            "gstatic.com",
+            "googleusercontent.com",
+            "wikipedia.org",
+            "wikimedia.org",
+            "telegram.org"
+        ],
+        "network": "tcp",
+        "outboundTag": "proxy",
+        "remarks": "proxy"
+    },
+    {
+        "outboundTag": "direct",
+        "port": "0-65535",
+        "remarks": "direct"
+    }
+]
+```
+
+Скопируйте его, откройте клиент, нажмите Настройки, нажмите Настройки маршрутизации, нажмите Добавить, в Примечания напишите vk-proxy, нажмите Импорт правил из буфера обмена, нажмите Да, нажмите Подтвердить, нажмите Подтвердить. Внизу, около Маршрутизация, выберите vk-proxy.
+
+</details>
+
+<details>
+
+<summary>
+v2rayNG
+</summary>
+
+Профиль:
+
+```text
+socks://Og%3D%3D@127.0.0.1:1080#vk-proxy
+```
+
+Скопируйте его, откройте клиент, нажмите плюс, нажмите Импорт из буфера обмена.
+
+Роутинг:
+
+```json
+[
+    {
+        "domain": [
+            "google.com",
+            "gstatic.com",
+            "googleusercontent.com",
+            "wikipedia.org",
+            "wikimedia.org",
+            "telegram.org"
+        ],
+        "enabled": true,
+        "locked": false,
+        "network": "tcp",
+        "outboundTag": "proxy",
+        "remarks": "vk-proxy: proxy"
+    },
+    {
+        "enabled": true,
+        "locked": false,
+        "outboundTag": "direct",
+        "port": "0-65535",
+        "remarks": "vk-proxy: direct"
+    }
+]
+```
+
+Скопируйте его, откройте клиент, нажмите настройки, нажмите Маршрутизация, нажмите три точки, нажмите Импорт правил из буфера обмена, подтвердите удаление существующих правил.
+
+</details>
+
+<details>
+
+<summary>
+v2ray/xray/sing-box
 </summary>
 
 ```json
@@ -577,49 +669,6 @@ vk-proxy может начать работать нестабильно или 
         ]
     }
 }
-```
-
-</details>
-
-<details>
-
-<summary>
-Пример конфига v2rayN и v2rayNG
-</summary>
-
-Интерфейс:
-
-```text
-socks://Og%3D%3D@127.0.0.1:1080#vk-proxy
-```
-
-Роутинг:
-
-```json
-[
-    {
-        "domain": [
-            "google.com",
-            "gstatic.com",
-            "googleusercontent.com",
-            "wikipedia.org",
-            "wikimedia.org",
-            "telegram.org"
-        ],
-        "enabled": true,
-        "locked": true,
-        "network": "tcp",
-        "outboundTag": "proxy",
-        "remarks": "vk-proxy: proxy"
-    },
-    {
-        "enabled": true,
-        "locked": true,
-        "outboundTag": "direct",
-        "port": "0-65535",
-        "remarks": "vk-proxy: direct"
-    }
-]
 ```
 
 </details>
