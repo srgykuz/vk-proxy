@@ -1,16 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"strings"
 	"time"
 )
 
 type config struct {
 	Log     configLog     `json:"log"`
+	DNS     configDNS     `json:"dns"`
 	Session configSession `json:"session"`
 	Socks   configSocks   `json:"socks"`
 	API     configAPI     `json:"api"`
@@ -23,6 +27,12 @@ type configLog struct {
 	Level   int    `json:"level"`
 	Output  string `json:"output"`
 	Payload bool   `json:"payload"`
+}
+
+type configDNS struct {
+	Host     string `json:"host"`
+	Port     uint16 `json:"port"`
+	Provider string `json:"provider"`
 }
 
 type configSession struct {
@@ -318,6 +328,48 @@ func configureLogger(cfg configLog) error {
 	logger := slog.New(handler)
 
 	slog.SetDefault(logger)
+
+	return nil
+}
+
+func configureDNS(cfg configDNS) error {
+	switch strings.ToLower(cfg.Provider) {
+	case "":
+	case "yandex":
+		cfg.Host = "77.88.8.8"
+		cfg.Port = 53
+	case "msk-ix":
+		cfg.Host = "62.76.76.62"
+		cfg.Port = 53
+	case "google":
+		cfg.Host = "8.8.8.8"
+		cfg.Port = 53
+	case "cloudflare":
+		cfg.Host = "1.1.1.1"
+		cfg.Port = 53
+	default:
+		return fmt.Errorf("unknown dns provider: %v", cfg.Provider)
+	}
+
+	if len(cfg.Host) == 0 {
+		return nil
+	}
+
+	if cfg.Port == 0 {
+		cfg.Port = 53
+	}
+
+	d := net.Dialer{
+		Timeout: time.Second * 3,
+	}
+	addr := fmt.Sprintf("%v:%v", cfg.Host, cfg.Port)
+
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return d.DialContext(ctx, "udp", addr)
+		},
+	}
 
 	return nil
 }

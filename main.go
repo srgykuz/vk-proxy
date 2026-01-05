@@ -47,6 +47,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := configureDNS(cfg.DNS); err != nil {
+		fmt.Fprintln(os.Stderr, "configure dns:", err)
+		os.Exit(1)
+	}
+
 	if err := validateQR(cfg.QR); err != nil {
 		fmt.Fprintln(os.Stderr, "validate qr:", err)
 		os.Exit(1)

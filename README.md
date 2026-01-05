@@ -163,6 +163,9 @@ nano /usr/local/etc/vk-proxy/config.json
     "log": {
         "output": "/var/log/vk-proxy/output.log"
     },
+    "dns": {
+        "provider": ""
+    },
     "session": {
         "secret": "abc123"
     },
@@ -421,6 +424,11 @@ curl --verbose --socks4 127.0.0.1:1080 https://api.ipapi.is/
         "level": 0, // Уровень логов. -4 - debug, 0 - info, 4 - warn, 8 - error
         "output": "", // Путь к файлу куда сохранять логи. Если пусто, то выводить логи в терминал
         "payload": false // Логировать тела запросов и ответов
+    },
+    "dns": {
+        "host": "", // Использовать этот DNS-сервер вместо системного. Поддерживается только plaintext DNS over UDP
+        "port": 0, // Если указан host, то указывает порт сервера. По умолчанию 53
+        "provider": "" // Установить host и port автоматически. Возможные значения: yandex, msk-ix, google, cloudflare
     },
     "session": {
         "timeout": 30000, // Если соединение бездействует в течение этого времени, то оно будет закрыто. В миллисекундах. 0 выключает проверку

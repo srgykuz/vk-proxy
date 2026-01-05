@@ -2,6 +2,9 @@
     "log": {
         "output": ""
     },
+    "dns": {
+        "provider": ""
+    },
     "session": {
         "secret": ""
     },
