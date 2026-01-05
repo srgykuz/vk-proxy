@@ -19,7 +19,7 @@ func main() {
 	flag.Parse()
 
 	if printVersion {
-		fmt.Fprintln(os.Stdout, "0.9")
+		fmt.Fprintln(os.Stdout, "0.10")
 		os.Exit(0)
 	}
 
