@@ -47,6 +47,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := configureLogger(cfg.Log); err != nil {
+		fmt.Fprintln(os.Stderr, "configure logger:", err)
+		os.Exit(1)
+	}
+
 	if err := configureDNS(cfg.DNS); err != nil {
 		fmt.Fprintln(os.Stderr, "configure dns:", err)
 		os.Exit(1)
@@ -74,11 +79,6 @@ func main() {
 			fmt.Fprintln(os.Stderr, "validate user:", user.Name+":", err)
 			os.Exit(1)
 		}
-	}
-
-	if err := configureLogger(cfg.Log); err != nil {
-		fmt.Fprintln(os.Stderr, "configure logger:", err)
-		os.Exit(1)
 	}
 
 	if err := initSession(cfg); err != nil {
