@@ -33,12 +33,12 @@ dist: bin
 	cp $(BIN_DIR)/$(NAME)-darwin-amd64 $(DIST_DIR)/tmp/$(NAME)
 	cp README.md stub.jpg stub.mp4 $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-darwin-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-macos-amd64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json
 
 	cp $(BIN_DIR)/$(NAME)-darwin-arm64 $(DIST_DIR)/tmp/$(NAME)
 	cp README.md stub.jpg stub.mp4 $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-darwin-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json
+	tar -czf $(DIST_DIR)/$(NAME)-$(VERSION)-macos-arm64.tar.gz -C $(DIST_DIR)/tmp $(NAME) README.md stub.jpg stub.mp4 config.json
 
 	cp $(BIN_DIR)/$(NAME)-windows-amd64.exe $(DIST_DIR)/tmp/$(NAME).exe
 	cp README.md stub.jpg stub.mp4 $(DIST_DIR)/tmp/
