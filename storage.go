@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -20,7 +21,7 @@ var storageNamespace = storageNamespaceUnknown
 var storageNamespaceChangedAt = time.Time{}
 var storageNextKey = 0
 
-func listenStorage(cfg config, club configClub) error {
+func listenStorage(ctx context.Context, cfg config, club configClub) error {
 	params := storageGetParams{
 		keys: createStorageGetKeys(),
 	}
@@ -30,34 +31,41 @@ func listenStorage(cfg config, club configClub) error {
 		return fmt.Errorf("club %v: %v", club.Name, err)
 	}
 
+	var sleep time.Duration
+
 	slog.Info("storage: listening", "club", club.Name)
 
 	for {
-		if !isSessionOpened() {
-			time.Sleep(500 * time.Millisecond)
-			continue
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(sleep):
+			if !isSessionOpened() {
+				sleep = time.Millisecond * 500
+				continue
+			}
+
+			current, err := storageGet(cfg.API, club, params)
+
+			if err != nil {
+				slog.Error("storage: listen", "club", club.Name, "err", err)
+				sleep = time.Second * 5
+				continue
+			}
+
+			changed := diffStorageValues(last, current)
+			last = current
+
+			for _, resp := range changed {
+				go func(value string) {
+					if err := handleStorageUpdate(cfg, club, value); err != nil {
+						slog.Error("storage: update", "club", club.Name, "err", err)
+					}
+				}(resp.Value)
+			}
+
+			sleep = time.Millisecond * 500
 		}
-
-		current, err := storageGet(cfg.API, club, params)
-
-		if err != nil {
-			slog.Error("storage: listen", "club", club.Name, "err", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		changed := diffStorageValues(last, current)
-		last = current
-
-		for _, resp := range changed {
-			go func(value string) {
-				if err := handleStorageUpdate(cfg, club, value); err != nil {
-					slog.Error("storage: update", "club", club.Name, "err", err)
-				}
-			}(resp.Value)
-		}
-
-		time.Sleep(500 * time.Millisecond)
 	}
 }
 

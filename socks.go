@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -28,13 +29,18 @@ var (
 	errPartialRead  = errors.New("partial read")
 )
 
-func listenSocks(cfg config) error {
+func listenSocks(ctx context.Context, cfg config) error {
 	addr := address{cfg.Socks.ListenHost, cfg.Socks.ListenPort}.String()
 	ln, err := net.Listen("tcp", addr)
 
 	if err != nil {
 		return err
 	}
+
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
 
 	slog.Info("socks: listening", "addr", addr)
 

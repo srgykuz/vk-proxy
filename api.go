@@ -362,7 +362,7 @@ type updateChangeString struct {
 	NewValue string `json:"new_value"`
 }
 
-func groupsUseLongPollServer(cfg configAPI, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {
+func groupsUseLongPollServer(ctx context.Context, cfg configAPI, server groupsGetLongPollServerResponse, last groupsUseLongPollServerResponse) (groupsUseLongPollServerResponse, error) {
 	values := url.Values{}
 
 	values.Set("act", "a_check")
@@ -373,7 +373,7 @@ func groupsUseLongPollServer(cfg configAPI, server groupsGetLongPollServerRespon
 	cfg.TimeoutMS = 30 * 1000
 	uri := fmt.Sprintf("%v?%v", server.Server, values.Encode())
 
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 
 	if err != nil {
 		return groupsUseLongPollServerResponse{}, err

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,13 +14,14 @@ import (
 	"time"
 )
 
-func listenLongPoll(cfg config, club configClub) error {
+func listenLongPoll(ctx context.Context, cfg config, club configClub) error {
 	server, err := groupsGetLongPollServer(cfg.API, club)
 
 	if err != nil {
 		return fmt.Errorf("club %v: %v", club.Name, err)
 	}
 
+	var sleep time.Duration
 	last := groupsUseLongPollServerResponse{
 		TS: server.TS,
 	}
@@ -27,37 +29,45 @@ func listenLongPoll(cfg config, club configClub) error {
 	slog.Info("long poll: listening", "club", club.Name)
 
 	for {
-		last, err = groupsUseLongPollServer(cfg.API, server, last)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(sleep):
+			last, err = groupsUseLongPollServer(ctx, cfg.API, server, last)
 
-		if err != nil {
-			slog.Error("long poll: listen", "club", club.Name, "err", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		if last.Failed != 0 {
-			slog.Debug("long poll: refresh", "club", club.Name)
-
-			server, err = groupsGetLongPollServer(cfg.API, club)
-
-			if err == nil {
-				last = groupsUseLongPollServerResponse{
-					TS: server.TS,
-				}
-			} else {
-				slog.Error("long poll: refresh", "club", club.Name, "err", err)
-				time.Sleep(5 * time.Second)
+			if err != nil {
+				slog.Error("long poll: listen", "club", club.Name, "err", err)
+				sleep = time.Second * 5
+				continue
 			}
 
-			continue
-		}
+			if last.Failed != 0 {
+				slog.Debug("long poll: refresh", "club", club.Name)
 
-		for _, upd := range last.Updates {
-			go func(upd update) {
-				if err := handleUpdate(cfg, club, upd); err != nil {
-					slog.Error("handler: update", "club", club.Name, "type", upd.Type, "err", err)
+				server, err = groupsGetLongPollServer(cfg.API, club)
+
+				if err == nil {
+					last = groupsUseLongPollServerResponse{
+						TS: server.TS,
+					}
+					sleep = 0
+				} else {
+					slog.Error("long poll: refresh", "club", club.Name, "err", err)
+					sleep = time.Second * 5
 				}
-			}(upd)
+
+				continue
+			}
+
+			for _, upd := range last.Updates {
+				go func(upd update) {
+					if err := handleUpdate(cfg, club, upd); err != nil {
+						slog.Error("handler: update", "club", club.Name, "type", upd.Type, "err", err)
+					}
+				}(upd)
+			}
+
+			sleep = 0
 		}
 	}
 }
@@ -560,18 +570,21 @@ func (q *handlerPriorityQueue) send(cmd dgCmd, pld []byte) {
 	}
 }
 
-func clearHandler() error {
+func clearHandler(ctx context.Context) error {
 	for {
-		time.Sleep(5 * time.Minute)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(5 * time.Minute):
+			handleDatagramMu.Lock()
 
-		handleDatagramMu.Lock()
-
-		for key, queue := range handleDatagramQueues {
-			if queue.isClosed() {
-				delete(handleDatagramQueues, key)
+			for key, queue := range handleDatagramQueues {
+				if queue.isClosed() {
+					delete(handleDatagramQueues, key)
+				}
 			}
-		}
 
-		handleDatagramMu.Unlock()
+			handleDatagramMu.Unlock()
+		}
 	}
 }

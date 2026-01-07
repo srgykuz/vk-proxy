@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -899,7 +900,7 @@ func (s *session) executeMethodTopicComment(encoded string) error {
 	return err
 }
 
-func clearSession() error {
+func clearSession(ctx context.Context) error {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -907,23 +908,24 @@ func clearSession() error {
 		defer wg.Done()
 
 		for {
-			time.Sleep(10 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Second):
+				sessionsMu.Lock()
 
-			sessionsMu.Lock()
+				for id, ses := range sessions {
+					if ses.isInactive() {
+						slog.Error("session: timeout", "id", id)
 
-			for id, ses := range sessions {
-				if ses.isInactive() {
-					slog.Error("session: timeout", "id", id)
-
-					wg.Add(1)
-					go func(ses *session) {
-						defer wg.Done()
-						ses.close()
-					}(ses)
+						go func(ses *session) {
+							ses.close()
+						}(ses)
+					}
 				}
-			}
 
-			sessionsMu.Unlock()
+				sessionsMu.Unlock()
+			}
 		}
 	}()
 
@@ -932,17 +934,20 @@ func clearSession() error {
 		defer wg.Done()
 
 		for {
-			time.Sleep(5 * time.Minute)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Minute):
+				sessionsMu.Lock()
 
-			sessionsMu.Lock()
-
-			for id, ses := range sessions {
-				if ses.isClosed() {
-					delete(sessions, id)
+				for id, ses := range sessions {
+					if ses.isClosed() {
+						delete(sessions, id)
+					}
 				}
-			}
 
-			sessionsMu.Unlock()
+				sessionsMu.Unlock()
+			}
 		}
 	}()
 

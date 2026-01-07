@@ -1,13 +1,42 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	errs := make(chan error, 100)
+	code := 0
+
+	go func() {
+		for {
+			err := <-errs
+			fmt.Fprintln(os.Stderr, err)
+			code = 1
+			cancel()
+		}
+	}()
+
+	if err := run(ctx, errs); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		code = 1
+	}
+
+	if runtime.GOOS == "windows" {
+		fmt.Fprintln(os.Stdout, "\nPress Enter to exit...")
+		fmt.Scanln()
+	}
+
+	os.Exit(code)
+}
+
+func run(ctx context.Context, errs chan<- error) error {
 	var cfgPath string
 	var printVersion bool
 	var genSecret bool
@@ -20,70 +49,62 @@ func main() {
 
 	if printVersion {
 		fmt.Fprintln(os.Stdout, "0.10")
-		os.Exit(0)
+
+		return nil
 	}
 
 	if genSecret {
 		secret, err := generateSecret()
 
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "generate secret:", err)
-			os.Exit(1)
+			return fmt.Errorf("generate secret: %v", err)
 		}
 
 		fmt.Fprintln(os.Stdout, secret)
-		os.Exit(0)
+
+		return nil
 	}
 
 	cfg, err := parseConfig(cfgPath)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "parse config:", err)
-		os.Exit(1)
+		return fmt.Errorf("parse config: %v", err)
 	}
 
 	if err := validateConfig(cfg); err != nil {
-		fmt.Fprintln(os.Stderr, "validate config:", err)
-		os.Exit(1)
+		return fmt.Errorf("validate config: %v", err)
 	}
 
 	if err := configureLogger(cfg.Log); err != nil {
-		fmt.Fprintln(os.Stderr, "configure logger:", err)
-		os.Exit(1)
+		return fmt.Errorf("configure logger: %v", err)
 	}
 
 	if err := configureDNS(cfg.DNS); err != nil {
-		fmt.Fprintln(os.Stderr, "configure dns:", err)
-		os.Exit(1)
+		return fmt.Errorf("configure dns: %v", err)
 	}
 
 	if err := validateQR(cfg.QR); err != nil {
-		fmt.Fprintln(os.Stderr, "validate qr:", err)
-		os.Exit(1)
+		return fmt.Errorf("validate qr: %v", err)
 	}
 
 	for _, club := range cfg.Clubs {
 		if err := validateClub(cfg.API, club); err != nil {
-			fmt.Fprintln(os.Stderr, "validate club:", club.Name+":", err)
-			os.Exit(1)
+			return fmt.Errorf("validate club: %v: %v", club.Name, err)
 		}
 
 		if err := validateLongPoll(cfg.API, club); err != nil {
-			fmt.Fprintln(os.Stderr, "validate long poll:", club.Name+":", err)
-			os.Exit(1)
+			return fmt.Errorf("validate long poll: %v: %v", club.Name, err)
 		}
 	}
 
 	for _, user := range cfg.Users {
 		if err := validateUser(cfg.API, user); err != nil {
-			fmt.Fprintln(os.Stderr, "validate user:", user.Name+":", err)
-			os.Exit(1)
+			return fmt.Errorf("validate user: %v: %v", user.Name, err)
 		}
 	}
 
 	if err := initSession(cfg); err != nil {
-		fmt.Fprintln(os.Stderr, "init session:", err)
-		os.Exit(1)
+		return fmt.Errorf("init session: %v", err)
 	}
 
 	var wg sync.WaitGroup
@@ -92,9 +113,8 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		if err := listenSocks(cfg); err != nil {
-			fmt.Fprintln(os.Stderr, "listen socks:", err)
-			os.Exit(1)
+		if err := listenSocks(ctx, cfg); err != nil {
+			errs <- fmt.Errorf("listen socks: %v", err)
 		}
 	}()
 
@@ -103,9 +123,8 @@ func main() {
 		go func(club configClub) {
 			defer wg.Done()
 
-			if err := listenLongPoll(cfg, club); err != nil {
-				fmt.Fprintln(os.Stderr, "listen long poll:", err)
-				os.Exit(1)
+			if err := listenLongPoll(ctx, cfg, club); err != nil {
+				errs <- fmt.Errorf("listen long poll: %v", err)
 			}
 		}(club)
 
@@ -113,9 +132,8 @@ func main() {
 		go func(club configClub) {
 			defer wg.Done()
 
-			if err := listenStorage(cfg, club); err != nil {
-				fmt.Fprintln(os.Stderr, "listen storage:", err)
-				os.Exit(1)
+			if err := listenStorage(ctx, cfg, club); err != nil {
+				errs <- fmt.Errorf("listen storage: %v", err)
 			}
 		}(club)
 	}
@@ -124,9 +142,8 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		if err := clearHandler(); err != nil {
-			fmt.Fprintln(os.Stderr, "clear handler:", err)
-			os.Exit(1)
+		if err := clearHandler(ctx); err != nil {
+			errs <- fmt.Errorf("clear handler: %v", err)
 		}
 	}()
 
@@ -134,11 +151,12 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		if err := clearSession(); err != nil {
-			fmt.Fprintln(os.Stderr, "clear session:", err)
-			os.Exit(1)
+		if err := clearSession(ctx); err != nil {
+			errs <- fmt.Errorf("clear session: %v", err)
 		}
 	}()
 
 	wg.Wait()
+
+	return nil
 }
