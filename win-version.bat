@@ -1,0 +1,1 @@
+vk-proxy.exe -version

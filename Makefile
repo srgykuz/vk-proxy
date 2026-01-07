@@ -43,12 +43,16 @@ dist: bin
 	cp $(BIN_DIR)/$(NAME)-windows-amd64.exe $(DIST_DIR)/tmp/$(NAME).exe
 	cp README.md stub.jpg stub.mp4 $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-amd64.zip $(NAME).exe README.md stub.jpg stub.mp4 config.json
+	cp win-secret.bat $(DIST_DIR)/tmp/secret.bat
+	cp win-version.bat $(DIST_DIR)/tmp/version.bat
+	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-amd64.zip $(NAME).exe README.md stub.jpg stub.mp4 config.json secret.bat version.bat
 
 	cp $(BIN_DIR)/$(NAME)-windows-arm64.exe $(DIST_DIR)/tmp/$(NAME).exe
 	cp README.md stub.jpg stub.mp4 $(DIST_DIR)/tmp/
 	cp config.template.json $(DIST_DIR)/tmp/config.json
-	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-arm64.zip $(NAME).exe README.md stub.jpg stub.mp4 config.json
+	cp win-secret.bat $(DIST_DIR)/tmp/secret.bat
+	cp win-version.bat $(DIST_DIR)/tmp/version.bat
+	cd $(DIST_DIR)/tmp && zip ../$(NAME)-$(VERSION)-windows-arm64.zip $(NAME).exe README.md stub.jpg stub.mp4 config.json secret.bat version.bat
 
 	cp $(BIN_DIR)/$(NAME)-android-arm64 $(DIST_DIR)/tmp/$(NAME)
 	cp README.md stub.jpg stub.mp4 $(DIST_DIR)/tmp/
