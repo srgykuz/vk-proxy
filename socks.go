@@ -30,7 +30,7 @@ var (
 )
 
 func listenSocks(ctx context.Context, cfg config) error {
-	addr := address{cfg.Socks.ListenHost, cfg.Socks.ListenPort}.String()
+	addr := address{cfg.Socks.Host, cfg.Socks.Port}.String()
 	ln, err := net.Listen("tcp", addr)
 
 	if err != nil {

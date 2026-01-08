@@ -46,8 +46,8 @@ func (cfg configSession) Timeout() time.Duration {
 }
 
 type configSocks struct {
-	ListenHost        string `json:"listenHost"`
-	ListenPort        uint16 `json:"listenPort"`
+	Host              string `json:"host"`
+	Port              uint16 `json:"port"`
 	ForwardSize       int    `json:"forwardSize"`
 	ForwardIntervalMS int    `json:"forwardInterval"`
 }
@@ -97,8 +97,8 @@ func defaultConfig() config {
 			TimeoutMS: 30 * 1000,
 		},
 		Socks: configSocks{
-			ListenHost:        "127.0.0.1",
-			ListenPort:        1080,
+			Host:              "127.0.0.1",
+			Port:              1080,
 			ForwardSize:       1 * 1024 * 1024,
 			ForwardIntervalMS: 500,
 		},

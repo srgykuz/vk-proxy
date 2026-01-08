@@ -255,7 +255,7 @@ docker compose run --rm vk-proxy -secret
 Откройте конфиг `config.json` в текущей папке и заполните его значениями которые вы записывали ранее. [Пример](#пример).
 
 - в `log.output` укажите `""`
-- в `socks.listenHost` укажите `"0.0.0.0"`
+- в `socks.host` укажите `"0.0.0.0"`
 
 #### 5. Запустите программу
 
@@ -407,10 +407,10 @@ vk-proxy -config /path/to/config.json
 
     "socks": {
         // Запустить SOCKS-прокси на этом адресе
-        "listenHost": "127.0.0.1",
+        "host": "127.0.0.1",
 
         // Запустить SOCKS-прокси на этом порту
-        "listenPort": 1080
+        "port": 1080
     },
 
     "api": {
@@ -496,8 +496,8 @@ vk-proxy -config /path/to/config.json
         "secret": "abc123"
     },
     "socks": {
-        "listenHost": "127.0.0.1",
-        "listenPort": 1080
+        "host": "127.0.0.1",
+        "port": 1080
     },
     "api": {
         "unathorized": false
