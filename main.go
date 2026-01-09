@@ -48,7 +48,7 @@ func run(ctx context.Context, errs chan<- error) error {
 	flag.Parse()
 
 	if printVersion {
-		fmt.Fprintln(os.Stdout, "0.10")
+		fmt.Fprintln(os.Stdout, "0.11")
 
 		return nil
 	}
